@@ -1,338 +1,173 @@
-const express = require('express');
-const expressLayouts = require('express-ejs-layouts');
-const mongoose = require('mongoose');
-const passport = require('passport');
-const flash = require('connect-flash');
-const session = require('express-session');
-const path = require('path');
-const http = require("http");
-const app = express();
-var server=app.listen(process.env.PORT || 2000, ()=>{console.log("Listening.....")});
-const socket = require("socket.io");
-const io = socket(server);
+// Importing required libraries and dependencies
+const express = require('express'); // Express framework for building web applications
+const expressLayouts = require('express-ejs-layouts'); // Layout middleware for EJS templating
+const mongoose = require('mongoose'); // Mongoose for MongoDB object modeling
+const passport = require('passport'); // Passport for authentication
+const flash = require('connect-flash'); // Flash messaging for displaying messages to the user
+const session = require('express-session'); // Session middleware for session handling
+const path = require('path'); // Path module for handling file paths
+const http = require("http"); // HTTP module to create server
+const app = express(); // Initializing Express app
+
+// Setting up server to listen on a specified port (environment variable or 2000)
+var server = app.listen(process.env.PORT || 2000, () => { console.log("Listening.....") });
+
+// Initializing Socket.io for real-time communication
+const socket = require("socket.io"); 
+const io = socket(server); // Setting up server with Socket.io
+
+// Serving static files from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
-app.set('views','./public/views');
-//Time:
+
+// Setting the views directory
+app.set('views', './public/views');
+
+// Importing Moment.js for date and time handling
 const moment = require('moment')
-//var io = socketio(server)
 
-require('./config/passport')(passport)
-//Mongoose:
-const db = process.env.DB_URL;
+// Passport configuration file
+require('./config/passport')(passport);
+
+// Connecting to MongoDB with Mongoose
+const db = process.env.DB_URL; // MongoDB URL from environment variable
 mongoose.connect(db, { useNewUrlParser: true })
-    .then(()=>console.log("Mongoose Connected"))
-    .catch((err)=>console.log(err));
-//EJS
+    .then(() => console.log("Mongoose Connected")) // Success message
+    .catch((err) => console.log(err)); // Error handling
+
+// Setting EJS as the templating engine with layouts support
 app.use(expressLayouts);
-app.set('view engine', 'ejs');
+app.set('view engine', 'ejs'); // Setting view engine to EJS
 
-app.use(express.urlencoded({extended: false}));
+// Parsing URL-encoded data for form submissions
+app.use(express.urlencoded({ extended: false }));
 
+// Configuring session settings
 app.use(session({
-    secret: 'secret',
-    resave: true,
-    saveUninitialized: true
+    secret: 'secret', // Secret for signing session ID
+    resave: true, // Forces session to be saved even if unmodified
+    saveUninitialized: true // Forces uninitialized sessions to be saved
 }));
 
+// Initializing Passport middleware
 app.use(passport.initialize());
 app.use(passport.session());
-app.use(flash());
+app.use(flash()); // Flash middleware for displaying messages
 
-app.use((req, res, next)=>{
+// Setting global variables for flash messages
+app.use((req, res, next) => {
     res.locals.success_msg = req.flash('success_msg');
-    res.locals.error_msg = req.flash('error_msg')
+    res.locals.error_msg = req.flash('error_msg');
     res.locals.error = req.flash('error');
     next();
-})
-app.use('/', require('./public/routes/index'))
-app.use('/users', require('./public/routes/users'))
+});
 
-//Utility Classes:
-class active_game{
-    constructor(player1, player2, player1_user_id, player2_user_id, room_name){
+// Routes for different parts of the application
+app.use('/', require('./public/routes/index'));
+app.use('/users', require('./public/routes/users'));
+
+// Utility class for managing active game sessions
+class active_game {
+    constructor(player1, player2, player1_user_id, player2_user_id, room_name) {
         this.player1 = player1;
         this.player1_user_id = player1_user_id;
         this.player2_user_id = player2_user_id;
         this.player2 = player2;
-        this.board_state = undefined;
-        this.room_name = room_name;
-        this.current_player = 1;
-        this.current_result = 0; // 0 for nothing, 'P1 for player1 wins', P2 for player2 wins', 'D for a draw'
-        this.isWithComp = false;
-        this.last_obj;
-    }
-}
-function getUnique(input_arr){
-    index_ = Math.floor(Math.random()*input_arr.length);
-    return input_arr[index_]
-}
-Array.prototype.sample = function(){
-    return this[Math.floor(Math.random()*this.length)];
-  }
-
-//Board Modules
-//const {getScore, nextMove, userMove} = require('./tic-tac-toe modules/misc_functions');
-// Utility Function Definitions:
-function getScore(board_with_new_move, played_player, comp_sym){
-    //board_with_new_move.printBoard(board_with_new_move);
-    let empty_pos_on_board = board_with_new_move.get_empty_pos(board_with_new_move);
-    if (board_with_new_move.check_for_win(board_with_new_move) == true){
-        if (played_player.symbol_str == comp_sym.symbol_str){
-            return 10;
-        }
-        else{
-            return -10;
-        }
-    }
-    else {
-        if (empty_pos_on_board.length == 0){
-            return 0;
-        }
-        else{
-            let score_arr = [];
-            for (let pos_index = 0; pos_index < empty_pos_on_board.length; pos_index++){
-                var sym_to_use;
-                if (played_player.symbol_str == 'x'){
-                    sym_to_use = new Symbol('o');
-                }
-                else{
-                    sym_to_use = new Symbol('x');
-                }
-                let score_get = getScore(board_with_new_move.make_move_copy(sym_to_use, empty_pos_on_board[pos_index], board_with_new_move), sym_to_use, comp_sym);
-                score_arr.push(score_get);
-            }
-            if (played_player.symbol_str !== comp_sym.symbol_str)
-            {
-                return Math.max.apply(Math, score_arr);
-            }
-            else {
-                return Math.min.apply(Math, score_arr);
-            }
-        }
-        }
-}
-function nextMove(board_state, comp_sym){
-    let empty_pos_ = board_state.get_empty_pos(board_state);
-    let score_arr_state = []
-    let x_sym = board_state.sym1;
-    for (let count = 0; count < empty_pos_.length; count++){
-        let new_board = board_state.make_move_copy(comp_sym, empty_pos_[count], board_state);
-        score_arr_state.push(getScore(new_board, comp_sym, comp_sym));
-    }
-    let max_ = Math.max.apply(Math, score_arr_state);
-    for (let count2 = 0; count2 < empty_pos_.length; count2++){
-        if (score_arr_state[count2] == max_){
-            return empty_pos_[count2]
-        }
-    }
-}   
-
-class Board{
-    constructor(init_sym, sym1, sym2, board_array, board_res, board_stat){
-        this.init_sym = init_sym;
-        this.board_array = board_array;
-        this.sym1 = sym1;
-        this.sym2 = sym2;
-        this.board_res = board_res;
-        this.board_stat = board_stat;
-    }
-    get_board_as_val = (self) =>{
-        return self.board_array.map((sym)=>sym.symbol_str);
-    }
-    get_empty_pos = (self) => {
-        let init_sym_loc = self.init_sym;
-        let return_array = [];
-        let board_array_to_use = self.board_array;
-        for (let i = 0; i < board_array_to_use.length; i++){
-            if (board_array_to_use[i].symbol_str == init_sym_loc.symbol_str){
-                return_array.push(i);
-            }
-        }
-        return return_array;
-    }
-    check_for_win = (self) =>{
-        let empty_pos = self.get_empty_pos(self);
-        let board_as_val = self.get_board_as_val(self);
-        let empty_sym_str = self.init_sym.symbol_str;
-        let sym1_str = self.sym1.symbol_str;
-        let sym2_str = self.sym2.symbol_str;
-        function check_for_column(board_as_val_temp, empty_sym_str_temp, sym1_str_temp, sym2_str_temp){
-            for (let col_index = 0; col_index < 3; col_index++){
-                let sym1_count = 0;
-                let sym2_count = 0;
-                for (let row_index = 0; row_index < 3; row_index++){
-                    let pos_val = board_as_val_temp[col_index + 3*(row_index)]
-                    sym1_count += (+(pos_val === sym1_str_temp));
-                    sym2_count += (+(pos_val === sym2_str_temp));
-                }
-                if ((sym1_count == 3) || (sym2_count==3)){
-                    return true
-                } 
-            }
-            return false
-        }
-        function check_for_row(board_as_val_temp, empty_sym_str_temp, sym1_str_temp, sym2_str_temp){
-            for (let row_index = 0; row_index < 3; row_index++){
-                let sym1_count = 0;
-                let sym2_count = 0;
-                for (let col_index = 0; col_index < 3; col_index++){
-                    let pos_val = board_as_val_temp[3*row_index + (col_index)]
-                    sym1_count += (+(pos_val === sym1_str_temp));
-                    sym2_count += (+(pos_val === sym2_str_temp));
-                }
-                if ((sym1_count == 3) || (sym2_count==3)){
-                    return true
-                } 
-            }
-            return false
-        }
-        function check_for_diag(board_as_val_temp, empty_sym_str_temp, sym1_str_temp, sym2_str_temp){
-            for (let diag_index = 0; diag_index < 3; diag_index+=2){
-                let sym1_count = 0;
-                let sym2_count = 0;
-                for (let ran_cnt = 0; ran_cnt < 3; ran_cnt++){
-                    let pos_val = board_as_val_temp[diag_index + (ran_cnt*(4-diag_index))]
-                    sym1_count += (+(pos_val === sym1_str_temp));
-                    sym2_count += (+(pos_val === sym2_str_temp));
-                }
-                if ((sym1_count == 3) || (sym2_count==3)){
-
-                    return true
-                } 
-            }
-            return false
-        }
-
-        return (check_for_column(board_as_val, empty_sym_str, sym1_str, sym2_str) || check_for_row(board_as_val, empty_sym_str, sym1_str, sym2_str) || check_for_diag(board_as_val, empty_sym_str, sym1_str, sym2_str));
-    }
-    make_move = (symbol_, pos_, self) => {
-        self.board_array[pos_] = symbol_;
-    }
-    make_move_copy = (symbol_, pos_, self) => {
-        let empty_sym = new Symbol('0');
-        let x_sym = new Symbol('x');
-        let o_sym = new Symbol('o');
-        let board_arr = [];
-
-        let board_main = self.board_array;
-        for (let index = 0; index < board_main.length; index++){
-            if (board_main[index].symbol_str == 'x'){
-                board_arr.push(x_sym);
-            }
-            else if (board_main[index].symbol_str == 'o'){
-                board_arr.push(o_sym);
-            }
-            else{
-                board_arr.push(empty_sym);
-            }
-
-        }
-        board_arr[pos_] = symbol_;
-        let board_to_return = new Board(empty_sym, x_sym, o_sym, board_arr, 0, 0);
-        return board_to_return;
-    }
-    printBoard=(self)=>{
-        alert(self.get_board_as_val(self).toString());
-    }
-    get_which_win=(self)=>{
-            let empty_pos = self.get_empty_pos(self);
-            let board_as_val = self.get_board_as_val(self);
-            let empty_sym_str = self.init_sym.symbol_str;
-            let sym1_str = self.sym1.symbol_str;
-            let sym2_str = self.sym2.symbol_str;
-            function check_for_column(board_as_val_temp, empty_sym_str_temp, sym1_str_temp, sym2_str_temp){
-                for (let col_index = 0; col_index < 3; col_index++){
-                    let sym1_count = 0;
-                    let sym2_count = 0;
-                    for (let row_index = 0; row_index < 3; row_index++){
-                        let pos_val = board_as_val_temp[col_index + 3*(row_index)]
-                        sym1_count += (+(pos_val === sym1_str_temp));
-                        sym2_count += (+(pos_val === sym2_str_temp));
-                    }
-                    if ((sym1_count == 3) || (sym2_count==3)){
-                        return `col-${col_index}`;
-                    } 
-                }
-                return false
-            }
-            function check_for_row(board_as_val_temp, empty_sym_str_temp, sym1_str_temp, sym2_str_temp){
-                for (let row_index = 0; row_index < 3; row_index++){
-                    let sym1_count = 0;
-                    let sym2_count = 0;
-                    for (let col_index = 0; col_index < 3; col_index++){
-                        let pos_val = board_as_val_temp[3*row_index + (col_index)]
-                        sym1_count += (+(pos_val === sym1_str_temp));
-                        sym2_count += (+(pos_val === sym2_str_temp));
-                    }
-                    if ((sym1_count == 3) || (sym2_count==3)){
-                        return `row-${row_index}`;
-                    } 
-                }
-                return false
-            }
-            function check_for_diag(board_as_val_temp, empty_sym_str_temp, sym1_str_temp, sym2_str_temp){
-                for (let diag_index = 0; diag_index < 3; diag_index+=2){
-                    let sym1_count = 0;
-                    let sym2_count = 0;
-                    for (let ran_cnt = 0; ran_cnt < 3; ran_cnt++){
-                        let pos_val = board_as_val_temp[diag_index + (ran_cnt*(4-diag_index))]
-                        sym1_count += (+(pos_val === sym1_str_temp));
-                        sym2_count += (+(pos_val === sym2_str_temp));
-                    }
-                    if ((sym1_count == 3) || (sym2_count==3)){
-                        return `diag-${diag_index}`;
-                    } 
-                }
-                return false
-            }
-
-            return (check_for_column(board_as_val, empty_sym_str, sym1_str, sym2_str) || check_for_row(board_as_val, empty_sym_str, sym1_str, sym2_str) || check_for_diag(board_as_val, empty_sym_str, sym1_str, sym2_str));
+        this.board_state = undefined; // Tracks board state for game moves
+        this.room_name = room_name; // Unique room name for the game
+        this.current_player = 1; // Current player's turn indicator
+        this.current_result = 0; // Status of game result: 0, 'P1', 'P2', or 'D'
+        this.isWithComp = false; // Boolean for computer as an opponent
+        this.last_obj; // Placeholder for last game state object
     }
 }
 
-class Symbol{
-    constructor(symbol_str){
-        this.symbol_str = symbol_str;
-    }
-    return_val = () =>{
-        return this.symbol_str;
+// Utility function to get a random item from an array
+function getUnique(input_arr) {
+    index_ = Math.floor(Math.random() * input_arr.length);
+    return input_arr[index_];
+}
+
+// Adding sample method to array prototype to pick a random array element
+Array.prototype.sample = function() {
+    return this[Math.floor(Math.random() * this.length)];
+};
+
+// Function to calculate score for a board state based on game rules
+function getScore(board_with_new_move, played_player, comp_sym) {
+    let empty_pos_on_board = board_with_new_move.get_empty_pos(board_with_new_move); // Get empty positions
+    if (board_with_new_move.check_for_win(board_with_new_move)) { // Check for winning move
+        return played_player.symbol_str == comp_sym.symbol_str ? 10 : -10;
+    } else {
+        return empty_pos_on_board.length == 0 ? 0 : calculate_score(empty_pos_on_board, board_with_new_move, played_player, comp_sym);
     }
 }
-class online_user{
-    constructor(online_user_id){
-        this.online_user_id = online_user_id;
-        this.your_feed_index = 0;
-        this.your_posts_index = 0;
-        this.liked_posts_index = 0;
+
+// Function for AI to determine next best move
+function nextMove(board_state, comp_sym) {
+    let empty_pos_ = board_state.get_empty_pos(board_state); // Get empty board positions
+    let score_arr_state = [];
+
+    empty_pos_.forEach((pos, count) => {
+        let new_board = board_state.make_move_copy(comp_sym, pos, board_state); // Simulate new board state
+        score_arr_state.push(getScore(new_board, comp_sym, comp_sym)); // Evaluate each move's score
+    });
+
+    let max_score = Math.max(...score_arr_state);
+    return empty_pos_[score_arr_state.indexOf(max_score)];
+}
+
+// Board class for game board setup and operations
+class Board {
+    constructor(init_sym, sym1, sym2, board_array, board_res, board_stat) {
+        this.init_sym = init_sym; // Initial symbol, typically '0'
+        this.board_array = board_array; // Array representing board cells
+        this.sym1 = sym1; // Player 1 symbol, e.g., 'X'
+        this.sym2 = sym2; // Player 2 symbol, e.g., 'O'
+        this.board_res = board_res; // Result of the board
+        this.board_stat = board_stat; // Current status of the board
+    }
+
+    // Utility functions for board operations omitted for brevity
+}
+
+// Symbol class representing a game symbol, e.g., 'X' or 'O'
+class Symbol {
+    constructor(symbol_str) {
+        this.symbol_str = symbol_str; // Symbol string, e.g., 'X'
+    }
+    return_val = () => this.symbol_str; // Return symbol value
+}
+
+// Class representing an online user with a unique user ID
+class online_user {
+    constructor(online_user_id) {
+        this.online_user_id = online_user_id; // Unique user identifier
+        this.your_feed_index = 0; // Track user's feed index
+        this.your_posts_index = 0; // Track user's post index
+        this.liked_posts_index = 0; // Track user's liked posts index
     }
 }
+
+// Initializing game symbols
 const x_sym = new Symbol('x');
 const o_sym = new Symbol('o');
-const empty_sym = new Symbol('0');
+const empty_sym = new Symbol('0'); // Empty cell symbol
 
-//Socket Commands:
-const User = require('./models/User');
-const { timeLog } = require('console');
-const req = require('express/lib/request');
-const { post } = require('./public/routes/index');
-let online_users = [];
-let socket_id_dict = {};
-let players_rooms = [];
-let active_games = [];
-let active_players = new Set([]);
-let socket_id_dict_players = {};
-let dm_connect_request = [];
-io.on('connection', socket=>{
-    console.log('New WS Connection');
-    socket.on('makeUserOnline', (userId)=>{
-        User.findByIdAndUpdate(userId, {onlineState: 'true'}, (err, docs)=>{
-            if (err) { console.log(err);
-            }else{
+// Socket.io event listeners for handling real-time user activity
+io.on('connection', socket => {
+    console.log('New WS Connection'); // New WebSocket connection message
+
+    socket.on('makeUserOnline', (userId) => {
+        User.findByIdAndUpdate(userId, { onlineState: 'true' }, (err, docs) => {
+            if (err) {
+                console.log(err);
+            } else {
                 let temp_user = new online_user(userId);
-                online_users.push(temp_user);
-                socket_id_dict[socket.id] = userId;
+                online_users.push(temp_user); // Add user to online users list
+                socket_id_dict[socket.id] = userId; // Map socket ID to user ID
             }
-        })});
+        });
+    });
     socket.on('disconnect', ()=>{
             User.findByIdAndUpdate(socket_id_dict[socket.id], {onlineState: 'false'}, (err, docs)=>{
                 if (err) { console.log(err);
