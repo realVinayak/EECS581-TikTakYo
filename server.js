@@ -706,99 +706,145 @@ io.on('connection', socket => {
 
 
     });
+    // Event listener for when a client requests a specific post
+    // `get-post-request` is triggered with a request string format like "type--|--index"
     socket.on('get-post-request', (string_for_post)=>{
-        let post_type = string_for_post.split('--|--')[0];
-        let post_index = string_for_post.split('--|--')[1];
-        let user_pr_id = socket_id_dict[socket.id];
+        // Split the request string to extract post type and post index
+        let post_type = string_for_post.split('--|--')[0];    // Type of post (e.g., user's posts, feed posts, liked posts)
+        let post_index = string_for_post.split('--|--')[1];    // Index of the post requested within the list
+        // Retrieve the user ID based on the socket ID from a mapping dictionary
+        let user_pr_id = socket_id_dict[socket.id];    // `socket_id_dict` maps socket ID to user ID for tracking users
         let socket_id = socket.id;
+
+        // Fetch the user's document from the database using their user ID
         User.findById(user_pr_id, (err, docs)=>{
-                if(err) {console.log(err)
+                if(err) {console.log(err)    // Log any errors that occur during DB retrieval
                 }else{
+                    // Case when the request is for the user's own posts
                     if (post_type === '0'){
+                        // If the user has no posts, inform the client by emitting a 'LEN0' message
+                    socket.emit('post-request-reply', 'LEN0');
                         if (docs.posts.length === 0){socket.emit('post-request-reply', 'LEN0')
                         }else{
+                            // `is_liked` will store whether the user has liked this post
                             let is_liked;
+                            // Calculate the index of the requested post, adjusting if `post_index` exceeds bounds
                             let post_index_int = (docs.posts.length - 1) - ((+post_index) % docs.posts.length);
-                            let post_to_send = docs.posts[post_index_int];
-                            let post_to_send_id = post_to_send.post_id_u;
+                            let post_to_send = docs.posts[post_index_int];    // Retrieve the post object
+                            let post_to_send_id = post_to_send.post_id_u;    // Get the unique post ID for reference
+
+                            // Determine if the current user has liked this post by checking the `liked_posts` array
                             if (docs.liked_posts.includes(post_to_send_id)){
                                 is_liked = true;
                             }else{
                                 is_liked = false;
                             }
+                            // Emit the post data back to the client along with its like status
                             socket.emit('post-request-reply', {type: 0, post_: docs.posts[post_index_int], is_liked});
 
                         }
+                    // Case when the request is for the feed posts
                     }else if(post_type === '1'){
+                        // If there are no posts in the feed, inform the client by emitting a 'LEN0' message
                         if (docs.posts_to_show.length === 0){socket.emit('post-request-reply', 'LEN0')
                         }else{
+                            // Calculate the index of the requested feed post
                             let post_index_int = docs.posts_to_show.length - 1 -((+post_index) % docs.posts_to_show.length);
+                            // Split the feed post identifier to retrieve the poster's user ID and the specific post index
                             let feed_post_index = docs.posts_to_show[post_index_int].split('***')[1];
                             let feed_post_poster = docs.posts_to_show[post_index_int].split('***')[0]
 
+                            // Find the poster's document to retrieve the requested post
                             User.findById(feed_post_poster, (err, docs2)=>{
                                 if(err){
-                                    console.log(err);
+                                    console.log(err);    // Log any errors that occur during DB retrieval for the feed poster
                                 }else{
-                                let post_to_send = docs2.posts[feed_post_index];
-                                let post_to_send_id = post_to_send.post_id_u;
+                                let post_to_send = docs2.posts[feed_post_index];    // Retrieve the specific feed post object
+                                let post_to_send_id = post_to_send.post_id_u;    // Get the unique post ID for reference
                                 let is_liked;
+                                
+                                // Check if the current user has liked the feed post
                                 if (docs.liked_posts.includes(post_to_send_id)){
                                     is_liked = true;
                                 }else{
                                     is_liked = false;
                                 }
+                                // Emit the feed post data back to the client along with its like status
                                 socket.emit('post-request-reply', {type: 1, post_: post_to_send, is_liked});
                             }
                             })
 
                         }
+                    // Case when the request is for the liked posts
                     }else{
+                        // If the user has no liked posts, inform the client by emitting a 'LEN0' message
                         if (docs.liked_posts.length === 0){socket.emit('post-request-reply', 'LEN0')
                         }else{
+                            // Calculate the index of the requested liked post
                             let post_index_int = docs.liked_posts.length - 1 - ((+post_index) % docs.liked_posts.length);
+
+                            // Split the liked post identifier to retrieve the poster's user ID and the specific post index
                             let feed_post_index = docs.liked_posts[post_index_int].split('***')[1];
                             let feed_post_poster = docs.liked_posts[post_index_int].split('***')[0]
+
+                            // Find the poster's document to retrieve the requested liked post
                             User.findById(feed_post_poster, (err, docs2)=>{
                                 if(err){
-                                    console.log(err);
+                                    console.log(err);    // Log any errors that occur during DB retrieval for the post poster
                                 }else{
-                                let post_to_send = docs2.posts[feed_post_index];
-                                let post_to_send_id = post_to_send.post_id_u;
+                                let post_to_send = docs2.posts[feed_post_index];    // Retrieve the specific liked post object
+                                let post_to_send_id = post_to_send.post_id_u;    // Get the unique post ID for reference
                                 let is_liked;
+                                // Check if the current user has liked the post
                                 if (docs.liked_posts.includes(post_to_send_id)){
                                     is_liked = true;
                                 }else{
                                     is_liked = false;
                                 }
+                                // Emit the liked post data back to the client along with its like status
                                 socket.emit('post-request-reply', {type: 1, post_: post_to_send, is_liked});
                             }
                             })
                         }
                     }
                 }        
-        })
-    })
+        })    // End of outer User.findById callback
+    })    // End of socket.on('get-post-request') callback
+
+    // Event listener for when a client requests to change a post's liked status
     socket.on('change_post_liked_stat', (msg_stuff)=>{
        console.log("requesting to change post like;");
        // TODO: Implement this
     })
+
+    // Event listener for checking if a user is currently active in a game
     socket.on('chk_for_cur_active', (user_id_to_check)=>{
+        // Iterate over active games to check if the user is a participant in any game
         for (let temp_counter = 0; temp_counter < active_games.length; temp_counter++){
             if ((active_games[temp_counter].player1_user_id === user_id_to_check) || (active_games[temp_counter].player2_user_id === user_id_to_check)){
+                
+                // Join the user to the game's room and emit the last game state object for rendering
                 socket.join(active_games[temp_counter].room_name);
                 socket.emit('web-render-msg', active_games[temp_counter].last_obj);
             }
         }
     })
+
+    // Event listener to get the count of user games (wins, losses, draws, and total games)
     socket.on('get-user-game-count', (user_id_games)=>{
+        // Retrieve the user's document based on user ID
         User.findById(user_id_games, (err, docs)=>{
+            // Emit the user's game statistics back to the client
             socket.emit('post-user-game-count', {'win': docs.won_count, 'lost': docs.lost_count, 'draw': docs.draw_count, 'tot_games':docs.total_games_count});
         })
     })    
+
+    // Extract user IDs for the current user and the profile user
     socket.on('give-user-data', (data_id_obj)=>{
-        let my_id = data_id_obj.my_id;
-        let user_data_id = data_id_obj.user_id_profile;
+        let my_id = data_id_obj.my_id;    // ID of the requesting user
+        let user_data_id = data_id_obj.user_id_profile;    // ID of the user whose profile is being requested
+
+        // Initialize the object to return with default values
         let obj_to_return = {'user_id': user_data_id,
                               'user_name': '',  
                              'tot_game_count': 0,
@@ -810,25 +856,39 @@ io.on('connection', socket => {
                              'following_': [],
                             'they_follow':false,
                             'i_follow': false};
+
+        // Retrieve the profile user's document using `user_data_id`
         User.findById(user_data_id, (err, docs1)=>{
+            // Retrieve the requesting user's document using `my_i
             User.findById(my_id, (err, docs)=>{
+                // Populate the return object with profile user's data
                 obj_to_return.user_name = docs1.name;
                 obj_to_return.tot_game_count = docs1.total_games_count;
                 obj_to_return.won_game_count = docs1.won_count;
                 obj_to_return.lost_game_count = docs1.lost_count;
                 obj_to_return.draw_game_count = docs1.draw_count;
+
+                // Clone and reverse the games list for chronological order
                 let temp_games = JSON.parse(JSON.stringify(docs1.games));
                 obj_to_return.games_ = temp_games.reverse();
+
+                // Parse followers and following lists of the profile user
                 let other_person_followers = JSON.parse(JSON.stringify(docs1.followers));
                 let other_person_following = JSON.parse(JSON.stringify(docs1.following));
+
+                // Parse followers and following lists of the requesting user
                 let my_followers = JSON.parse(JSON.stringify(docs.followers));
                 let my_following = JSON.parse(JSON.stringify(docs.following));
+
+                // Map the profile user's followers to include whether the requesting user follows them and vice versa
                 let other_follower_obj_arr = other_person_followers.map((follower)=>{return{
                     'name': follower.userName,
                     'id':follower.userId,
-                    'they_follow': check_for_val(my_followers, follower.userId),
-                    'i_follow': check_for_val(my_following, follower.userId)
+                    'they_follow': check_for_val(my_followers, follower.userId),    // Check if follower is in requesting user's followers
+                    'i_follow': check_for_val(my_following, follower.userId)    // Check if follower is in requesting user's following
                 }})
+
+                // Helper function to check if a user is present in a specified array
                 function check_for_val(array1, val){
                     if (array1){
                         for (let counter = 0; counter < array1.length; counter++){
@@ -839,111 +899,179 @@ io.on('connection', socket => {
                     }
                     return false
                 }
+
+                // Map the profile user's following to include whether the requesting user follows them and vice versa
                 let other_following_obj_arr = other_person_following.map((following)=>{return{
                     'name': following.userName,
                     'id':following.userId,
-                    'they_follow': check_for_val(my_followers, following.userId),
-                    'i_follow': check_for_val(my_following, following.userId)
+                    'they_follow': check_for_val(my_followers, following.userId),    // Check if the followed user is in requesting user's followers
+                    'i_follow': check_for_val(my_following, following.userId)    // Check if the followed user is in requesting user's following
+                };
                 }})
+
+                // Populate the followers and following arrays in the return object
                 obj_to_return.followers_ = JSON.parse(JSON.stringify(other_follower_obj_arr));
                 obj_to_return.following_ = JSON.parse(JSON.stringify(other_following_obj_arr));
-                obj_to_return.i_follow = check_for_val(my_following, user_data_id);
-                obj_to_return.they_follow = check_for_val(my_followers, user_data_id);
+
+                // Determine mutual follow status between the requesting user and profile user
+                obj_to_return.i_follow = check_for_val(my_following, user_data_id);    // Check if requesting user follows profile user
+                obj_to_return.they_follow = check_for_val(my_followers, user_data_id);    // Check if profile user follows requesting user
+
+                // Emit the fully populated user data object back to the client
                 socket.emit('return-user-data', obj_to_return);
             })
 
         })
     })
     socket.on('remove-from-prev-game', (user_id_to_remove)=>{
+        // Initialize variable to store index of game to remove, initially set to 'none'
         let index_to_remove = 'none';
+
+        // Loop through the active games to find a match with the provided user ID
         for (let counter = 0; counter < active_games.length; counter++){
+            // Check if either player in the game matches the user ID to be removed
             if ((active_games[counter].player1_user_id === user_id_to_remove) || (active_games[counter].player2_user_id === user_id_to_remove)){
+                // If a match is found, set `index_to_remove` to the current game index
                 index_to_remove = counter;
 
             }
         }
+        // If a game was found that includes the user to remove
         if (index_to_remove !== 'none'){
+            // Remove both players from the `active_players` set
             active_players.delete(active_games[index_to_remove].player1_user_id);
             active_players.delete(active_games[index_to_remove].player2_user_id);
+
+            // Notify all clients in the room that the opponent's turn is reset to '0'
             io.to(active_games[index_to_remove].room_name).emit('opp-next', '0');
+
+            // Iterate over all clients in the room and make each client leave it
             io.sockets.clients(active_games[index_to_remove].room_name).forEach(function(s){
                 s.leave(active_games[index_to_remove].room_name);
             });
+
+            // Make the current socket leave the game room as well
             socket.leave(active_games[index_to_remove].room_name);
+
+            // Remove the game entry from the `active_games` array
             active_games.splice(index_to_remove);   
         }
     })
     socket.on('dm-msg-request', (some_obj)=>{
+        // Extract user IDs for both the message sender and receiver
         let other_user_id = some_obj.other_user_id;
         let this_user_id = some_obj.my_id;
 
     })
+
+
     function post_dm_message(input_user_id, room_name_to_search){
+        // Extract the user ID for message retrieval
         let user_id = input_user_id;
+
+        // Find the user's document in the database
         User.findById(user_id, (err, docs)=>{
+
+            // Access the user's messages array
             let message_arr = docs.messages;
             let room_index = undefined;
+
+            // Search for the specified room in the user's message array
             for (let temp_counter_4 = 0; temp_counter_4 < message_arr.length; temp_counter_4++){
+                // If the room name in the array matches the specified room
                 if (message_arr[temp_counter_4].room_name === room_name_to_search){
+                    // Store the index of the found room
                     room_index = temp_counter_4;
+                    // Emit the message content to clients in the room
                     io.to(room_name_to_search).emit('dm_msg_list', {'msg_content': message_arr[temp_counter_4].message_content});
                 }
             }
         })
     }
+
+
     socket.on('join-socket-msg-room', (room_join_obj)=>{
+        // Extract the room name and user ID from the request object
         let room_to_join_dm = room_join_obj.room_to_join;
         let user_id = room_join_obj.user_id;
+
+        // Call `post_dm_message` to display messages for the joining user
         post_dm_message(user_id, room_to_join_dm);
+        // Add the user to the requested room
         socket.join(room_to_join_dm);
+        // Confirm room join to the user
         socket.emit('room-joined-dm', '0');
     })
+
     socket.on('leave-socket-msg-room', (room_to_leave_dm)=>{
+        // Make the socket leave the specified room
         socket.join(room_to_leave_dm);
+        // Confirm room leave to the user
         socket.emit('room-left-dm', '0');
     })
+
     socket.on('dm-msg-post', (post_obj)=>{
         console.log('DM MESSAGE REQUEST: ', post_obj)
+        // Extract room name, sender ID, and message content from the request
         let room_dm_msg = post_obj.room_name;
         let sender_dm_id = post_obj.sender_id;
         let dm_msg_content = post_obj.msg_content;
+
+        // Split room name to identify the other person in the direct message
         let id_arr = room_dm_msg.split('---|---');
         var other_person_id;
+
+        // Determine the other person's ID based on the room name
         if (id_arr[0] ===  sender_dm_id){
+            // If the first ID in the array matches the sender, set the other person to the second ID
             other_person_id = id_arr[1]
         }else{
+            // Otherwise, set the other person to the first ID
             other_person_id = id_arr[0]
         }
         console.log('Other Person ID: ', other_person_id);
+
+        // Find the sender's document to retrieve their name and message data
         User.findById(sender_dm_id, (err, docs)=>{
             if (err){
                 console.log(err);
             }else{
+                // Store sender's name and message array for further updates
                 let my_name = docs.name;
                 let msg_arr = docs.messages;
                 let room_index = 'null';
+
+                // Check for an existing message room within the sender's messages array
                 for (let temp_counter_3 = 0; temp_counter_3 < msg_arr.length; temp_counter_3++){
+                    // If a room with a matching name is found, store its index
                     if (msg_arr[temp_counter_3].room_name === room_dm_msg){
                         room_index = temp_counter_3;
                     }
                 }
+
+                // If the room exists in the sender's messages
                 if (!(room_index==='null')){
+                    // Construct a message object with sender's details and a timestamp
                     let msg_content_obj = {
-                        'sender_name': my_name,
-                        'sender_id': sender_dm_id,
-                        'date_of_message': moment().format('MMMM Do YYYY, h:mm a'),
-                        'message_text': dm_msg_content,
+                        'sender_name': my_name,    // Sender's name
+                        'sender_id': sender_dm_id,    // Sender's user ID
+                        'date_of_message': moment().format('MMMM Do YYYY, h:mm a'),    // Message timestamp
+                        'message_text': dm_msg_content,    // The actual message content
                     }
+
+                    // Add the message to the sender's message array in the database using `$push` update
                     User.findOneAndUpdate({'_id': sender_dm_id, "messages.room_name": room_dm_msg}, {$push: {
                         "messages.$.message_content": msg_content_obj
                     }}, (err, docs)=>{
                         if (err) {console.log(err)
                         }else{
+                            // Add the same message object to the recipient's messages in the database
                             User.findOneAndUpdate({'_id': other_person_id, "messages.room_name": room_dm_msg}, {$push:{
                                 "messages.$.message_content": msg_content_obj 
                             }}, (err, docs=>{
                                 if (err) {console.log(err)
                                 }else{
+                                    // After both updates, call `post_dm_message` to broadcast messages to the room
                                     post_dm_message(sender_dm_id, room_dm_msg);
                                 }
                             }))
