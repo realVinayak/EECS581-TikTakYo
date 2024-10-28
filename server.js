@@ -377,12 +377,13 @@ io.on('connection', socket => {
         }
     }
     }
+    //function of managing the move of the computer in the tic-tac-toe game, updating the game board and rendering the player's move in a game room.
     function comp_make_move_render(room_number, game_active, current_board, move_sym, move_index, current_turn_, comp_sym){
-        current_board.make_move(move_sym, move_index, current_board);
-        let current_turn = current_turn_;
-        game_active.current_player = current_turn;
-        let temp_board_state = current_board.get_board_as_val(current_board);
-        let init_obj = {
+        current_board.make_move(move_sym, move_index, current_board); //update the game board according to player's move
+        let current_turn = current_turn_; //set the given turn value to the current turn
+        game_active.current_player = current_turn; //update the current player
+        let temp_board_state = current_board.get_board_as_val(current_board); //return an array of values representing the state of the current board
+        let init_obj = { //initialize an object to hold the sate of current game for rendering
         'current_turn': game_active.current_player,
         'but_1': '',
         'but_2': '',
@@ -394,40 +395,43 @@ io.on('connection', socket => {
         'but_8': '',
         'but_9': '',
         'msg': ''}
+        // loop for assigning the appropriate button in the render object of the game board state
         for (let temp_counter = 0; temp_counter < 9; temp_counter++){
-            if (temp_board_state[temp_counter] === '0'){
+            if (temp_board_state[temp_counter] === '0'){ //if the current position is empty, return an empty string
                 init_obj[`but_${temp_counter+1}`] = '';
-            }else if(temp_board_state[temp_counter] === 'x'){
+            }else if(temp_board_state[temp_counter] === 'x'){ //else if the current position is 'x', then set the button to 'X'
                 init_obj[`but_${temp_counter+1}`] = 'X';
-            }else{
+            }else{ //otherwise, set the button to 'O'
                 init_obj[`but_${temp_counter+1}`] = 'O';
             }
 
         }
-        io.to(room_number).emit('web-render-msg', init_obj)
-        game_active.last_obj = JSON.parse(JSON.stringify(init_obj));
-        let isWin = current_board.check_for_win(current_board);
-        let empty_pos = current_board.get_empty_pos(current_board);
+        io.to(room_number).emit('web-render-msg', init_obj) //report the updating of the board state to clients for rendering
+        game_active.last_obj = JSON.parse(JSON.stringify(init_obj)); //save the last board state for the fame session
+        let isWin = current_board.check_for_win(current_board); //check if there is any win condition on the board exists
+        let empty_pos = current_board.get_empty_pos(current_board); //assign empty positions
+        //retrieves the IDs and names of both players from the game_active object in the event of win or draw
         let temp_pl_1_id = game_active.player1_user_id;
         let temp_pl_2_id = game_active.player2_user_id;
         let temp_pl_1_name = game_active.player1;
         let temp_pl_2_name = game_active.player2;
-        if (isWin){
-            if (current_turn === 2){
-                io.to(room_number).emit('result_here', {result: 'P1', string: current_board.get_which_win(current_board)})
-                game_active.current_result = 'P1';
+        if (isWin){ //handle the moves in the game when a win condition is detected
+            if (current_turn === 2){ //in case the current turn belongs to player 1, then they are the winner
+                io.to(room_number).emit('result_here', {result: 'P1', string: current_board.get_which_win(current_board)}) //announce that player 1 is the winner and broadcast the result to clients
+                game_active.current_result = 'P1'; //update the game state that player 1 is the winner
+                //Update the database with the game results
                 User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"W"}}}, (err, follower_)=>{
                     if(err){
-                        console.log(err);
+                        console.log(err); //if there is error occur, log all errors in the updating player 1's win record
                     }
                 })
                 User.findByIdAndUpdate(temp_pl_2_id, {$push: {'games':{'opponent': temp_pl_1_id, 'me_first_player': false, 'opponent_name':temp_pl_1_name, result:"L"}}}, (err, follower_)=>{
                     if(err){
-                        console.log(err);
+                        console.log(err); //if there is error occur, log all errors in the updating player 2's loss record
                     }
                 })
-                updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'P1', 2);
-            }else{
+                updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'P1', 2); //update the counters by calling a function, indicating that player 1 won 
+            }else{ // in case it's player 2's turn, then they are the winner
                 io.to(room_number).emit('result_here', {result: 'P2', string: current_board.get_which_win(current_board)})
                 game_active.current_result = 'P2';
                 User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"L"}}}, (err, follower_)=>{
@@ -443,11 +447,11 @@ io.on('connection', socket => {
                 updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'P2', 1);
         }
 
-        }else{
-            if(empty_pos.length === 0){
+        }else{ // in case there is no winner, check in the draw if the have has ended 
+            if(empty_pos.length === 0){ //in case there is no more spaces left on the board, report the draw result to clients in the game room
                 io.to(room_number).emit('result_here', {result: 'D', string: "none"})
-                game_active.current_result = 'D';
-                if (current_turn === 1){
+                game_active.current_result = 'D'; //set the game state to reflect a draw
+                if (current_turn === 1){ //if the current turn (also the last turn) is player 1's turn, update the database with the player 1's last draw
                 User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"D"}}}, (err, follower_)=>{
                     if(err){
                         console.log(err);
@@ -458,8 +462,8 @@ io.on('connection', socket => {
                         console.log(err);
                     }
                 })
-                updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'D', 1);
-            }else{
+                updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'D', 1); //update all counters for both players
+            }else{ //if the current turn (also the last turn) is player 2's turn, update the database with the player 2's last draw
                 User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"D"}}}, (err, follower_)=>{
                     if(err){
                         console.log(err);
@@ -470,19 +474,21 @@ io.on('connection', socket => {
                         console.log(err);
                     }
                 })
-                updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'D', 2);
+                updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'D', 2); //update all counters for both players
             }
             }else{
-                let compMove = nextMove(current_board, comp_sym);
-                current_board.make_move(comp_sym, compMove, current_board);
-                let temp_board_state = current_board.get_board_as_val(current_board);
+                //in case there is no win or draw, the computer will make a move
+                let compMove = nextMove(current_board, comp_sym); // Calls the nextMove function to determine the computer's move based on the current board and its symbol.
+                current_board.make_move(comp_sym, compMove, current_board); //update the game board after the computer makes a move
+                let temp_board_state = current_board.get_board_as_val(current_board); // Retrieves the current state of the board as an array of values for rendering.
+                //switch the turn to the next player
                 let current_turn__ = game_active.current_player;
                 if (current_turn__ === 1){
                     game_active.current_player = 2;
                 }else{
                     game_active.current_player = 1;
                 }
-                let init_obj = {
+                let init_obj = { //initialize again the render object with the new board state
                 'current_turn': game_active.current_player,
                 'but_1': '',
                 'but_2': '',
@@ -494,28 +500,31 @@ io.on('connection', socket => {
                 'but_8': '',
                 'but_9': '',
                 'msg': ''}
-                for (let temp_counter = 0; temp_counter < 9; temp_counter++){
-                    if (temp_board_state[temp_counter] === '0'){
+                //use the updated board state to populate the render object
+                for (let temp_counter = 0; temp_counter < 9; temp_counter++){ //for loop through each position
+                    if (temp_board_state[temp_counter] === '0'){ //if the pos is empty, set the corresponding button to an empty string
                         init_obj[`but_${temp_counter+1}`] = '';
-                    }else if(temp_board_state[temp_counter] === 'x'){
+                    }else if(temp_board_state[temp_counter] === 'x'){ //else if the current position is 'x', then set the button to 'X'
                         init_obj[`but_${temp_counter+1}`] = 'X';
-                    }else{
+                    }else{ //otherwise, set the button to 'O'
                         init_obj[`but_${temp_counter+1}`] = 'O';
                     }
 
                 }
-                io.to(room_number).emit('web-render-msg', init_obj)
-                game_active.last_obj = JSON.parse(JSON.stringify(init_obj));
-                let isWin = current_board.check_for_win(current_board);
-                let empty_pos = current_board.get_empty_pos(current_board);
+                io.to(room_number).emit('web-render-msg', init_obj) //report the updated board state to clients in the room for rendering
+                game_active.last_obj = JSON.parse(JSON.stringify(init_obj)); //save updated board state
+                let isWin = current_board.check_for_win(current_board); // Checks again if there is a win or draw after the computer's move.
+                let empty_pos = current_board.get_empty_pos(current_board); // Retrieves the list of empty positions on the board
+                //stores the players' id
                 let temp_pl_1_id = game_active.player1_user_id;
                 let temp_pl_2_id = game_active.player2_user_id;
+                //stores the players' name
                 let temp_pl_1_name = game_active.player1;
                 let temp_pl_2_name = game_active.player2;
-                if (isWin){
-                    if (game_active.current_player === 1){
-                    io.to(room_number).emit('result_here', {result: 'P2', string: current_board.get_which_win(current_board)})
-                    game_active.current_result = 'P2';
+                if (isWin){ //handle the moves in the game when a win condition is detected
+                    if (game_active.current_player === 1){ //if the current player is player 1
+                    io.to(room_number).emit('result_here', {result: 'P2', string: current_board.get_which_win(current_board)}) // Sends the result of the game to the room, indicating that player 2 has won.
+                    game_active.current_result = 'P2'; //update the game state
                     User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"L"}}}, (err, follower_)=>{
                         if(err){
                             console.log(err);
@@ -527,7 +536,7 @@ io.on('connection', socket => {
                         }
                     })
                     updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'P2', 2);
-                }else if (game_active.current_player === 2){
+                }else if (game_active.current_player === 2){ //if the current player is player 2, ends the result of the game to the room, indicating that player 1 has won
                         io.to(room_number).emit('result_here', {result: 'P1', string: current_board.get_which_win(current_board)})
                         game_active.current_result = 'P1';
                         User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"W"}}}, (err, follower_)=>{
@@ -543,8 +552,23 @@ io.on('connection', socket => {
                         updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'P1', 1);
                 }
                 }else{
-                    if(empty_pos.length === 0){
-                        if ((game_active.current_player === 2)){
+                    if(empty_pos.length === 0){ //if there are no empty spaces left on the board
+                        if ((game_active.current_player === 2)){ //check if player 2 is the current player
+                        io.to(room_number).emit('result_here', {result: 'D', string: "none"}) //emit a message to the game room that the game concluded in a draw
+                        game_active.current_result = 'D'; //update the game state to reflect a draw
+                        //update the player's record in the database  to reflect a draw with the other player
+                        User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"D"}}}, (err, follower_)=>{
+                            if(err){
+                                console.log(err);
+                            }
+                        })
+                        User.findByIdAndUpdate(temp_pl_2_id, {$push: {'games':{'opponent': temp_pl_1_id, 'me_first_player': false, 'opponent_name':temp_pl_1_name, result:"D"}}}, (err, follower_)=>{
+                            if(err){
+                                console.log(err);
+                            }
+                        })
+                        updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'D', 1); //updates the win/loss/draw count in the database for both players, indicating a draw
+                    }else{ //otherwise, the current player is the player 1
                         io.to(room_number).emit('result_here', {result: 'D', string: "none"})
                         game_active.current_result = 'D';
                         User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"D"}}}, (err, follower_)=>{
@@ -557,66 +581,52 @@ io.on('connection', socket => {
                                 console.log(err);
                             }
                         })
-                        updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'D', 1);
-                    }else{
-                        io.to(room_number).emit('result_here', {result: 'D', string: "none"})
-                        game_active.current_result = 'D';
-                        User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"D"}}}, (err, follower_)=>{
-                            if(err){
-                                console.log(err);
-                            }
-                        })
-                        User.findByIdAndUpdate(temp_pl_2_id, {$push: {'games':{'opponent': temp_pl_1_id, 'me_first_player': false, 'opponent_name':temp_pl_1_name, result:"D"}}}, (err, follower_)=>{
-                            if(err){
-                                console.log(err);
-                            }
-                        })
-                        updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'D', 2);
+                        updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'D', 2); // Updates the win/loss/draw count in the database for both players, indicating a draw
                     }
                     }
                 }
             }
         }
     }
-    socket.on('make-this-move', (obj_here)=>{
-        let button_counter = obj_here.counter;
-        let user_id = obj_here.user_id;
-        if (active_players.has(user_id)){
-            let sent_socket = user_id;
-            let len_actv_game_arr = active_games.length;
-            let room_number = undefined;
-            let current_board = undefined;
-            let isPlayer1;
-            let game_active = undefined;
-            for (let counter = 0; counter < len_actv_game_arr; counter++){
+    socket.on('make-this-move', (obj_here)=>{ //listen for a 'make-this-move' event and takes an object as an argument
+        let button_counter = obj_here.counter; //extract from the receiving object the move counter (which button was pressed)
+        let user_id = obj_here.user_id; //extracts the user ID from the received object
+        if (active_players.has(user_id)){ //if the set of active players include the user ID
+            let sent_socket = user_id; //store the user ID
+            let len_actv_game_arr = active_games.length;//announce the amount of active games available currently
+            let room_number = undefined; //initialize room number variable
+            let current_board = undefined; //initialize the current board state variable
+            let isPlayer1;//initialize a variable if the user is player 1
+            let game_active = undefined; //initialize a variable to hold the currently active game.
+            for (let counter = 0; counter < len_actv_game_arr; counter++){ //a loop through each active game
                 //check which room does the sent_socket_belongs too.
-                let game_ = active_games[counter];
-                if ((game_.player1_user_id === sent_socket) || (game_.player2_user_id === sent_socket)){
-                    game_active = game_;
-                    room_number = game_.room_name;
-                    current_board = game_.board_state;
-                    if (game_.player1_user_id === sent_socket){
-                        isPlayer1 = true;
-                    }else{
+                let game_ = active_games[counter]; //get the current game in the iteration
+                if ((game_.player1_user_id === sent_socket) || (game_.player2_user_id === sent_socket)){ //check if the user is the player 1 or player 2 in the game
+                    game_active = game_; //set the active game variable to the found game
+                    room_number = game_.room_name; //retrieve the room name from the active game
+                    current_board = game_.board_state; //let the current state of the game board
+                    if (game_.player1_user_id === sent_socket){ //if the user is player 1
+                        isPlayer1 = true; //set the isPlayer1 variable to true
+                    }else{ //otherwise, indicating the user is player 2
                         isPlayer1 = false;
                     }
                 }
             }
-            if (game_active.current_result === 0){
-                if (game_active.isWithComp){                   
-                    if ((isPlayer1)&&(game_active.current_player === 1)){
+            if (game_active.current_result === 0){ //check if the game is still going and there is no win or draw
+                if (game_active.isWithComp){    //if this is an against-a-computer game                
+                    if ((isPlayer1)&&(game_active.current_player === 1)){ //check if the current player is player 1, call a function to handle the computer making a move after player 1
                         comp_make_move_render(room_number, game_active, current_board, o_sym, button_counter-1, 2, x_sym);
-                    }else if((!(isPlayer1))&&(game_active.current_player === 2)){
+                    }else if((!(isPlayer1))&&(game_active.current_player === 2)){ //if current player is player 2, call a function to handle the computer making a move after player 2
                         comp_make_move_render(room_number, game_active, current_board, x_sym, button_counter-1, 1, o_sym);
                         console.log("Got Here!")
                     }
-                }else{
-                    if ((isPlayer1) && (game_active.current_player === 1)){
+                }else{ //otherwise, the game is the against-other-player game
+                    if ((isPlayer1) && (game_active.current_player === 1)){ //if the current player is player 1, call a function to handle player 1's move
                         make_move_render(room_number, game_active, current_board, o_sym, button_counter-1, 2);                    
-                    }else if ((!(isPlayer1)) && (game_active.current_player === 2)){
+                    }else if ((!(isPlayer1)) && (game_active.current_player === 2)){ //if the current player is player 2, call a function to handle player 2's move
                         make_move_render(room_number, game_active, current_board, x_sym, button_counter-1, 1);                 
                     }
-                    else{
+                    else{ //otherwise, send a message to the user announce that it's not their turn.
                         socket.emit('not-your-turn', "Please Wait For Your Turn!");
                     }
                 }
@@ -624,52 +634,56 @@ io.on('connection', socket => {
         }
     })
 
-    socket.on('connect-with-computer', (user)=>{
+    socket.on('connect-with-computer', (user)=>{ //listen for a 'connect-with-computer' event and take a user object as an argument
         console.log("requesting to connect with a computer");
         // TODO: Implement this
     });
 
-    socket.on('chat-msg-user', (msg)=>{
+    socket.on('chat-msg-user', (msg)=>{ //listen for a 'chat-msg-user' event and takes a message object as an argument
         // TODO: Implement this
 
     })
-    socket.on('user-post-request', (post_)=>{
-        let post_user_id = post_.user_id;
-        let poster_name = '';
-        let post_user_title = post_.user_post_title;
-        let post_user_content = post_.user_post_content;
-        let post_time = moment().format('MMMM Do YYYY, h:mm a');
-        let post_id = '';
-        let poster_name_arr = []
+    socket.on('user-post-request', (post_ )=>{
+        let post_user_id = post_.user_id; //extract the user ID of the poster from the received object
+        let poster_name = ''; //initialize an empty string to hold the name of the poster.
+        let post_user_title = post_.user_post_title; //extract the title of the user's post.
+        let post_user_content = post_.user_post_content; //extract the content of the user's post from the received object.
+        let post_time = moment().format('MMMM Do YYYY, h:mm a'); //format the current date and time.
+        let post_id = ''; //initialize an empty string to hold the unique post ID.
+        let poster_name_arr = []; //initialize an empty array to store the name of the poster.
+        //find the user by user's ID
         User.findById(post_user_id, (err, docs)=>{
-            if (err) {
+            if (err) { //check error
                 console.log(err)
-            }else{
-                post_id = `${post_user_id}` + '***' + `${docs.posts.length}`;
-                poster_name = docs.name;
-                poster_name_arr.push(docs.name);
-                let zero_ = 0;
+            }else{ //if there is no error exists
+                post_id = `${post_user_id}` + '***' + `${docs.posts.length}`; //use the user ID and the current length of their posts array to create a unique post ID
+                poster_name = docs.name; //retrieve the user's name from the database
+                poster_name_arr.push(docs.name); //add the user's name to the array
+                let zero_ = 0; //a variable to track the like count
+                //insert the new post into the user's posts array to update their document
                 User.findByIdAndUpdate(post_user_id, 
                     {$push: {"posts": {"post_id_u": post_id, "title_u": post_user_title, "content_u": post_user_content, "date_u": post_time, "poster_name_u": poster_name, "like_count": zero_}}},
                     {safe: true, upsert: true, new : true}, (err, docs)=>{
-                    if (err) {console.log(err)
-                    }else{
+                    if (err) {console.log(err) //log an error if it exists
+                    }else{ //otherwise, fetch the updated user data
                         User.findById(post_user_id, (err, docs)=>{
-                            if(err){console.log(err)
-                            }else{
+                            if(err){console.log(err) //log an error if the user data retrieval fails
+                            }else{ //otherwise, create a copy of the user's followers array
                             let user_followers_arr = [...docs.followers];
-                            for (let counter = 0; counter < user_followers_arr.length; counter++){
+                            for (let counter = 0; counter < user_followers_arr.length; counter++){ //notify each follower of the new post by iterating over them.
+                                //update each follower's document to add the new post ID to their 'posts_to_show' array
                                 User.findByIdAndUpdate(user_followers_arr[counter].userId, {$push: {'posts_to_show':post_id}}, (err, follower_)=>{
                                     if(err){
                                         console.log(err);
                                     }else{
-                                        let notif_count_current = follower_.notif_count;
-                                        let notif_count_mod = notif_count_current + 1;
-                                        let notif_string = `${poster_name} Just Posted A Post!`;
+                                        let notif_count_current = follower_.notif_count; //retrieve the current notification count for the follower
+                                        let notif_count_mod = notif_count_current + 1; //increment the notification count by 1
+                                        let notif_string = `${poster_name} Just Posted A Post!`; //construct a notification message
+                                        //update the follower's notifications array
                                         User.findByIdAndUpdate(user_followers_arr[counter].userId, {$push: {'notifications':notif_string}}, (err, docs)=>{
                                             if(err){
                                                 console.log(err);
-                                            }else{
+                                            }else{ //update the follower's notification count in the database
                                                 User.findByIdAndUpdate(user_followers_arr[counter].userId, {$set: {'notif_count':notif_count_mod}}, (err, docs)=>{
                                                     if(err){
                                                         console.log(err);
