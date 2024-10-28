@@ -1079,49 +1079,62 @@ io.on('connection', socket => {
 
                         }
                     })
+                // Handling the scenario where a direct message is sent to a user
                 }else{
+                    // Find the other person in the database using their ID
                     User.findById(other_person_id, (err, docs)=>{
+                        // If there's an error in finding the user
                         if (err){console.log(err)
                         }else{
+                            // Extract the name of the other person from the retrieved user document
                             let other_person_name = docs.name;
+                            // Create a message object for the sender containing their details and the message content
                             let my_message_obj = {
-                                "other_person_id": other_person_id,
-                                "other_person_name": other_person_name,
-                                "room_name": room_dm_msg,
+                                "other_person_id": other_person_id,    // ID of the other person
+                                "other_person_name": other_person_name,    // Name of the other person
+                                "room_name": room_dm_msg,    // The room for direct messaging
                                 "message_content": [
                                     {
-                                        'sender_name': my_name,
-                                        'sender_id': sender_dm_id,
-                                        'date_of_message': moment().format('MMMM Do YYYY, h:mm a'),
-                                        'message_text': dm_msg_content
+                                        'sender_name': my_name,    // Name of the sender
+                                        'sender_id': sender_dm_id,    // ID of the sender
+                                        'date_of_message': moment().format('MMMM Do YYYY, h:mm a'),    // Timestamp of the message
+                                        'message_text': dm_msg_content    // The actual content of the message
+                    }
                                     }
                                 ]
                             }
 
+                            // Create a message object for the other person, including the sender's details
                             let other_message_obj = {
-                                "other_person_id": sender_dm_id,
-                                "other_person_name": my_name,
-                                "room_name": room_dm_msg,
+                                "other_person_id": sender_dm_id,    // ID of the sender
+                                "other_person_name": my_name,    // Name of the sender
+                                "room_name": room_dm_msg,    // The room for direct messaging
                                 "message_content": [
                                     {
-                                        'sender_name': my_name,
-                                        'sender_id': sender_dm_id,
-                                        'date_of_message': moment().format('MMMM Do YYYY, h:mm a'),
-                                        'message_text': dm_msg_content
+                                        'sender_name': my_name,    // Name of the sender
+                                        'sender_id': sender_dm_id,    // ID of the sender
+                                        'date_of_message': moment().format('MMMM Do YYYY, h:mm a'),    // Timestamp of the message
+                                        'message_text': dm_msg_content       // The actual content of the message
                                     }
                                 ]
                             }
+
+                            // Update the sender's document by pushing their message object to the messages array
                             User.findOneAndUpdate({'_id': sender_dm_id}, {$push:{
                                 messages: my_message_obj
                             }}, (err, docs)=>{
+                                // If there's an error during the update
                                 if (err) {console.log(err)
                                 }else{
+                                    // Update the other person's document by pushing the sender's message object to their messages array
                                     User.findOneAndUpdate({'_id': other_person_id}, {$push:{
                                         messages: other_message_obj
                                     }}, (err, docs)=>{
+                                        // If there's an error during the update
                                         if(err){
                                             console.log(err);
                                         }else{
+                                            // Call `post_dm_message` to broadcast the message to the specified room
                                             post_dm_message(sender_dm_id, room_dm_msg);
                                         }
                                     })
@@ -1134,42 +1147,71 @@ io.on('connection', socket => {
             }
         })
     })
+
+    // Socket event for retrieving the user's message list
     socket.on('get-user-msg-list', (user_id)=>{
+        // Find the user document in the database by ID
         User.findById(user_id, (err, docs)=>{
+            // Access the messages array of the user document
             let msg_arr = docs.messages;
+            // Map through the messages to create a simplified array containing names and room names
             let array_to_return = msg_arr.map((msg_inst)=>{return {'name':msg_inst.other_person_name, 'room_name':msg_inst.room_name}})
+            // Emit the mapped array back to the client as a reply
             socket.emit('user-list-msg-reply', array_to_return);
         })
     })
+
+    // Socket event for removing a follower (implementation needed)
     socket.on('remove-follower', (rec_obj)=>{
         // TODO: Implement this
     })
+
+    // Socket event for following another user
     socket.on('make-user-follow', (some_obj)=>{
-        let id_1 = some_obj.id_1;
-        let id_2 = some_obj.id_2;
-        let name_1;
-        let name_2;
+        // Extract the IDs of the two users involved in the follow action
+        let id_1 = some_obj.id_1;    // The user initiating the follow
+        let id_2 = some_obj.id_2;    // The user being followed
+        let name_1;    // Variable to store the name of the follower
+        let name_2;    // Variable to store the name of the user being followed
+
+        // Find the user document of the person being followed
         User.findById(id_2, (err, docs)=>{
+            // Extract the name of the user being followed
             name_2 = docs.name;
+            // Update the following list of the user initiating the follow
             User.findOneAndUpdate({'_id': id_1}, {$push:
                 {'following':{'userId':id_2, 'userName':name_2}}}, (err, docs)=>{
+                    // If there's an error during the update
                     if(err){
                         console.log(err);
                     }else{
+                        // Extract the name of the follower after the update
                         name_1 = docs.name;
+
+                        // Update the followers list of the user being followed
                         User.findOneAndUpdate({'_id':id_2}, {$push:
                         {'followers':{'userId':id_1, 'userName':name_1}}}, (err, docs)=>{
+                            // If there's an error during the update
                             if(err){console.log(err)
                             }else{
+                                // Emit a refresh event to update the profiles of both users
                                 socket.emit('refresh-prof', {'id_1':id_1, 'id_2':id_2});
-                                let notif_current_count = docs.notif_count;
-                                let notif_count_mod = notif_current_count + 1;
-                                let notif_string = `${name_1} Started Following You!`;
+
+                                // Update the notification count for the user being followed
+                                let notif_current_count = docs.notif_count;    // Get current notification count
+                                let notif_count_mod = notif_current_count + 1;    // Increment notification count
+                                let notif_string = `${name_1} Started Following You!`;    // Create a notification message'
+
+                                // Update the notifications array of the user being followed
                                 User.findByIdAndUpdate(id_2, {$push: {'notifications': notif_string}}, (err, docs)=>{
+                                    // If there's an error during the notification update
                                     if (err){
                                         console.log(err);
                                     }else{
+
+                                    // Update the notification count for the user being followed
                                     User.findByIdAndUpdate(id_2, {$set: {'notif_count':notif_count_mod}}, (err, docs)=>{
+                                        // If there's an error during the notification count update
                                         if(err){
                                             console.log(err);
                                         }
@@ -1185,33 +1227,48 @@ io.on('connection', socket => {
     })
 
     })
+
+    // Socket event for unfollowing a user
     socket.on('make-user-unfollow', (some_obj)=>{
         // TODO: Implement this
     })
+
+    // Socket event to get the notification count for a specific user
     socket.on('get-user-notif-count', (user_id)=>{
         // TODO: Implement this
-        socket.emit('post-user-notif-count', 0);
+        socket.emit('post-user-notif-count', 0);    // Emitting a placeholder value of 0 for now
     })
+
+    // Socket event to retrieve the array of notifications for a specific user
     socket.on('get-notif-array', (user_id)=>{
         // TODO: Implement this
-        socket.emit('post-notif-array', []);
+        socket.emit('post-notif-array', []);    // Emitting a placeholder empty array for now
+});
     })
 
 })
 
 
-
+// Function to update the Win, Loss, Draw (WLD) count for two players after a game
 function updateWLDGcount(temp_player_1_id, temp_player_2_id, result_, which_computer){
+    // Check if Player 1 won
     if (result_ === 'P1'){
+        // Ensure Player 1 is not a computer player
         if (!(which_computer === 1)){
+        // Find Player 1 in the database using their ID
         User.findById(temp_player_1_id, (err, docs)=>{
+            // If there's an error retrieving the user
             if(err){
                 console.log(err);
             }else{
-            let won_count_final = docs.won_count + 1;
-            let game_count_final = docs.total_games_count + 1;
-            console.log("RAN 1")
+                // Increment the win and game count for Player 1
+            let won_count_final = docs.won_count + 1;    // Update won count
+            let game_count_final = docs.total_games_count + 1;    // Update total game count
+            console.log("RAN 1")    // Debug message to confirm execution
+
+            // Update the user document for Player 1
             User.findByIdAndUpdate(temp_player_1_id, {$set: {'won_count': won_count_final, 'total_games_count': game_count_final}}, (err, docs)=>{
+                // If there's an error during the update
                 if(err){
                     console.log(err);
                 }
@@ -1219,15 +1276,22 @@ function updateWLDGcount(temp_player_1_id, temp_player_2_id, result_, which_comp
         }
         }
         )
+    // Ensure Player 2 is not a computer player
     }   if (!(which_computer === 2)){
+        // Find Player 2 in the database using their ID
         User.findById(temp_player_2_id, (err, docs)=>{
+            // If there's an error retrieving the user
             if(err){
                 console.log(err);
             }else{
-            let lost_count_final = docs.lost_count + 1;
-            let game_count_final = docs.total_games_count + 1;
-            console.log("RAN 2")
+            // Increment the loss and game count for Player 2
+            let lost_count_final = docs.lost_count + 1;    // Update lost count
+            let game_count_final = docs.total_games_count + 1;    // Update total game count
+            console.log("RAN 2")    // Debug message to confirm execution
+
+            // Update the user document for Player 2
             User.findByIdAndUpdate(temp_player_2_id, {$set: {'lost_count': lost_count_final, 'total_games_count': game_count_final}}, (err, docs)=>{
+                // If there's an error during the update
                 if(err){
                     console.log(err);
                 }
@@ -1236,16 +1300,26 @@ function updateWLDGcount(temp_player_1_id, temp_player_2_id, result_, which_comp
         }
         )
     }
+    // Check if Player 2 won
     }else if (result_ === 'P2'){
+        // Ensure Player 2 is not a computer player
         if (!(which_computer === 2)){
+        
+        // Find Player 2 in the database using their ID
         User.findById(temp_player_2_id, (err, docs)=>{
+            // If there's an error retrieving the user
             if(err){
                 console.log(err);
             }else{
-            let won_count_final = docs.won_count + 1;
-            let game_count_final = docs.total_games_count + 1;
-            console.log("RAN 3")
+
+            // Increment the win and game count for Player 2
+            let won_count_final = docs.won_count + 1;    // Update won count
+            let game_count_final = docs.total_games_count + 1;    // Update total game count
+            console.log("RAN 3")    // Debug message to confirm execution
+
+                // Update the user document for Player 2
             User.findByIdAndUpdate(temp_player_2_id, {$set: {'won_count': won_count_final, 'total_games_count': game_count_final}}, (err, docs)=>{
+                // If there's an error during the update
                 if(err){
                     console.log(err);
                 }
@@ -1254,15 +1328,23 @@ function updateWLDGcount(temp_player_1_id, temp_player_2_id, result_, which_comp
         }
         )
     }
+        // Ensure Player 1 is not a computer player
         if (!(which_computer === 1)){
+
+        // Find Player 1 in the database using their ID
         User.findById(temp_player_1_id, (err, docs)=>{
+            // If there's an error retrieving the user
             if(err){
                 console.log(err);
             }else{
-            let lost_count_final = docs.lost_count + 1;
-            let game_count_final = docs.total_games_count + 1;
-            console.log("RAN 4")
+            // Increment the loss and game count for Player 1
+            let lost_count_final = docs.lost_count + 1;    // Update lost count
+            let game_count_final = docs.total_games_count + 1;    // Update total game count
+            console.log("RAN 4")       // Debug message to confirm execution
+
+            // Update the user document for Player 1
             User.findByIdAndUpdate(temp_player_1_id, {$set: {'lost_count': lost_count_final, 'total_games_count': game_count_final}}, (err, docs)=>{
+                // If there's an error during the update
                 if(err){
                     console.log(err);
                 }
@@ -1271,15 +1353,24 @@ function updateWLDGcount(temp_player_1_id, temp_player_2_id, result_, which_comp
         }
         )
     }
+        // If the game ended in a draw
     }else{
+        // Ensure Player 2 is not a computer player
         if (!(which_computer === 2)){
+
+        // Find Player 2 in the database using their ID
         User.findById(temp_player_2_id, (err, docs)=>{
+            // If there's an error retrieving the user
             if(err){
                 console.log(err);
             }else{
-            let draw_count_final = docs.draw_count + 1;
-            let game_count_final = docs.total_games_count + 1;
+            // Increment the draw and game count for Player 2
+            let draw_count_final = docs.draw_count + 1;    // Update draw count
+            let game_count_final = docs.total_games_count + 1;    // Update total game count
+
+            // Update the user document for Player 2
             User.findByIdAndUpdate(temp_player_2_id, {$set: {'draw_count': draw_count_final, 'total_games_count': game_count_final}}, (err, docs)=>{
+                // If there's an error during the update
                 if(err){
                     console.log(err);
                 }
@@ -1288,14 +1379,23 @@ function updateWLDGcount(temp_player_1_id, temp_player_2_id, result_, which_comp
         }
         )
     }
+    // Ensure Player 1 is not a computer player
     if (!(which_computer === 1)){
+
+        // Find Player 1 in the database using their ID
          User.findById(temp_player_1_id, (err, docs)=>{
+             // If there's an error retrieving the user
              if(err){
                  console.log(err);
              }else{
-            let draw_count_final = docs.draw_count + 1;
-            let game_count_final = docs.total_games_count + 1;
+
+            // Increment the draw and game count for Player 1
+            let draw_count_final = docs.draw_count + 1;    // Update draw count
+            let game_count_final = docs.total_games_count + 1;    // Update total game count
+
+            // Update the user document for Player 1
             User.findByIdAndUpdate(temp_player_1_id, {$set: {'draw_count': draw_count_final, 'total_games_count': game_count_final}}, (err, docs)=>{
+            // If there's an error during the update
             if(err){
                 console.log(err);
             }
