@@ -1,3 +1,11 @@
+/**
+Name of Program: server.js
+Description: Node.js server script for backend functionality
+Inputs: None
+Outputs: None
+Author: Zach Alwin, Kristin Boeckmann, Lisa Phan, Nicholas Hausler, Vinayak Jha
+Creation Date: 10/27/2024
+ */
 // Importing required libraries and dependencies
 const express = require('express'); // Express framework for building web applications
 const expressLayouts = require('express-ejs-layouts'); // Layout middleware for EJS templating
