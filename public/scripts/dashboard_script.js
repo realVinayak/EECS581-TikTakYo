@@ -1,3 +1,12 @@
+
+/**
+Name of Program: dashboard_script.js
+Description: Script that gets loaded for dashboard functionality
+Inputs: None
+Outputs: None
+Author: Zach Alwin, Kristin Boeckmann, Lisa Phan, Nicholas Hausler, Vinayak Jha
+Creation Date: 10/27/2024
+ */
 const socket = io();
 let glob_is_userOnline = false;
 let glob_user_show_stat = 0;

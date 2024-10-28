@@ -1,3 +1,11 @@
+/**
+Name of Program: play_station_lorc_script.js
+Description: Script that gets loaded for play functionality
+Inputs: None
+Outputs: None
+Author: Zach Alwin, Kristin Boeckmann, Lisa Phan, Nicholas Hausler, Vinayak Jha
+Creation Date: 10/27/2024
+ */
 const socket = io();
 socket.emit('player-type', isLive);
 socket.emit('chk_for_cur_active', user_id);
