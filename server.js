@@ -9,272 +9,623 @@ Creation Date: 10/27/2024
 // Importing required libraries and dependencies
 const express = require('express'); // Express framework for building web applications
 const expressLayouts = require('express-ejs-layouts'); // Layout middleware for EJS templating
-const mongoose = require('mongoose'); // Mongoose for MongoDB object modeling
+const mongoose = require('mongoose');  // Mongoose for MongoDB object modeling
 const passport = require('passport'); // Passport for authentication
-const flash = require('connect-flash'); // Flash messaging for displaying messages to the user
+const flash = require('connect-flash');  // Flash messaging for displaying messages to the user
 const session = require('express-session'); // Session middleware for session handling
 const path = require('path'); // Path module for handling file paths
 const http = require("http"); // HTTP module to create server
-const app = express(); // Initializing Express app
+const app = express();   // Initializing Express app
 
 // Setting up server to listen on a specified port (environment variable or 2000)
-var server = app.listen(process.env.PORT || 2000, () => { console.log("Listening.....") });
+var server=app.listen(process.env.PORT || 2000, ()=>{console.log("Listening.....")});
 
 // Initializing Socket.io for real-time communication
-const socket = require("socket.io"); 
-const io = socket(server); // Setting up server with Socket.io
+const socket = require("socket.io");
+// Setting up server with Socket.io
+const io = socket(server);
 
 // Serving static files from 'public' directory
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Setting the views directory
-app.set('views', './public/views');
 
-// Importing Moment.js for date and time handling
+app.set('views','./public/views');
+//Time:
 const moment = require('moment')
 
 // Passport configuration file
-require('./config/passport')(passport);
-
-// Connecting to MongoDB with Mongoose
-const db = process.env.DB_URL; // MongoDB URL from environment variable
+require('./config/passport')(passport)
+//Mongoose:
+// Get the DB URL from environment
+const db = process.env.DB_URL;
+// Conenct to the database
 mongoose.connect(db, { useNewUrlParser: true })
-    .then(() => console.log("Mongoose Connected")) // Success message
-    .catch((err) => console.log(err)); // Error handling
-
-// Setting EJS as the templating engine with layouts support
+    .then(()=>console.log("Mongoose Connected"))
+    .catch((err)=>console.log(err));
+//EJS layouts
 app.use(expressLayouts);
-app.set('view engine', 'ejs'); // Setting view engine to EJS
+// Set view engine
+app.set('view engine', 'ejs');
 
-// Parsing URL-encoded data for form submissions
-app.use(express.urlencoded({ extended: false }));
+// Set properties
+app.use(express.urlencoded({extended: false}));
 
-// Configuring session settings
+// Set properties
 app.use(session({
-    secret: 'secret', // Secret for signing session ID
-    resave: true, // Forces session to be saved even if unmodified
-    saveUninitialized: true // Forces uninitialized sessions to be saved
+    secret: 'secret',
+    resave: true,
+    saveUninitialized: true
 }));
 
-// Initializing Passport middleware
 app.use(passport.initialize());
 app.use(passport.session());
-app.use(flash()); // Flash middleware for displaying messages
+app.use(flash());
 
-// Setting global variables for flash messages
-app.use((req, res, next) => {
+app.use((req, res, next)=>{
     res.locals.success_msg = req.flash('success_msg');
-    res.locals.error_msg = req.flash('error_msg');
+    res.locals.error_msg = req.flash('error_msg')
     res.locals.error = req.flash('error');
     next();
-});
+})
+app.use('/', require('./public/routes/index'))
+app.use('/users', require('./public/routes/users'))
 
-// Routes for different parts of the application
-app.use('/', require('./public/routes/index'));
-app.use('/users', require('./public/routes/users'));
-
-// Utility class for managing active game sessions
-class active_game {
-    constructor(player1, player2, player1_user_id, player2_user_id, room_name) {
+//Utility Classes:
+class active_game{
+    constructor(player1, player2, player1_user_id, player2_user_id, room_name){
         this.player1 = player1;
         this.player1_user_id = player1_user_id;
         this.player2_user_id = player2_user_id;
         this.player2 = player2;
-        this.board_state = undefined; // Tracks board state for game moves
-        this.room_name = room_name; // Unique room name for the game
-        this.current_player = 1; // Current player's turn indicator
-        this.current_result = 0; // Status of game result: 0, 'P1', 'P2', or 'D'
-        this.isWithComp = false; // Boolean for computer as an opponent
-        this.last_obj; // Placeholder for last game state object
+        this.board_state = undefined;
+        this.room_name = room_name;
+        this.current_player = 1;
+        this.current_result = 0; // 0 for nothing, 'P1 for player1 wins', P2 for player2 wins', 'D for a draw'
+        this.isWithComp = false;
+        this.last_obj;
     }
 }
 
-// Utility function to get a random item from an array
-function getUnique(input_arr) {
-    index_ = Math.floor(Math.random() * input_arr.length);
-    return input_arr[index_];
+// Add global property to array same an element
+Array.prototype.sample = function(){
+    return this[Math.floor(Math.random()*this.length)];
+  }
+
+
+// Name: getScore
+// Author: Nick
+// Date: 10/27/2024
+// Preconditions: biard with new move, current player, comparison symbol
+// Postconditions: score as an int
+function getScore(board_with_new_move, played_player, comp_sym){
+
+    // Get empty position
+    let empty_pos_on_board = board_with_new_move.get_empty_pos(board_with_new_move);
+    // If there is a win, return win or loss
+    if (board_with_new_move.check_for_win(board_with_new_move) == true){
+        if (played_player.symbol_str == comp_sym.symbol_str){
+            // if player is the same, it's a win so +10
+            return 10;
+        }
+        else{
+            // Otherwise, it's a loss, return -10
+            return -10;
+        }
+    }
+    else {
+        // This is draw, no more empty positions
+        if (empty_pos_on_board.length == 0){
+            return 0;
+        }
+        else{
+            // For each different move, compute the next score
+            let score_arr = [];
+            // Iterate through each empty position
+            for (let pos_index = 0; pos_index < empty_pos_on_board.length; pos_index++){
+                var sym_to_use;
+                if (played_player.symbol_str == 'x'){
+                    // Generate "O" as that's the next symbol
+                    sym_to_use = new Symbol('o');
+                }
+                else{
+                    // Generate "X" as that's the next symbol
+                    sym_to_use = new Symbol('x');
+                }
+                // Get the score after making this move
+                let score_get = getScore(board_with_new_move.make_move_copy(sym_to_use, empty_pos_on_board[pos_index], board_with_new_move), sym_to_use, comp_sym);
+                // Push the score 
+                score_arr.push(score_get);
+            }
+            // Get the max if current player is bot
+            if (played_player.symbol_str !== comp_sym.symbol_str)
+            {
+                return Math.max.apply(Math, score_arr);
+            }
+            else {
+                // return min otherwise
+                return Math.min.apply(Math, score_arr);
+            }
+        }
+        }
 }
 
-// Adding sample method to array prototype to pick a random array element
-Array.prototype.sample = function() {
-    return this[Math.floor(Math.random() * this.length)];
-};
+// Name: nextMove
+// Author: Nick
+// Date: 10/27/2024
+// Preconditions: board_state, comp_sym
+// Postconditions: next move as an int
+function nextMove(board_state, comp_sym){
+    // Get the empty position
+    let empty_pos_ = board_state.get_empty_pos(board_state);
+    let score_arr_state = []
+    let x_sym = board_state.sym1;
+    for (let count = 0; count < empty_pos_.length; count++){
+        // Generate new board for each move
+        let new_board = board_state.make_move_copy(comp_sym, empty_pos_[count], board_state);
+        // Append the score
+        score_arr_state.push(getScore(new_board, comp_sym, comp_sym));
+    }
+    // Compute the max
+    let max_ = Math.max.apply(Math, score_arr_state);
+    for (let count2 = 0; count2 < empty_pos_.length; count2++){
+        // Return the move that maximizes the max
+        if (score_arr_state[count2] == max_){
+            return empty_pos_[count2]
+        }
+    }
+}   
 
-// Function to calculate score for a board state based on game rules
-function getScore(board_with_new_move, played_player, comp_sym) {
-    let empty_pos_on_board = board_with_new_move.get_empty_pos(board_with_new_move); // Get empty positions
-    if (board_with_new_move.check_for_win(board_with_new_move)) { // Check for winning move
-        return played_player.symbol_str == comp_sym.symbol_str ? 10 : -10;
-    } else {
-        return empty_pos_on_board.length == 0 ? 0 : calculate_score(empty_pos_on_board, board_with_new_move, played_player, comp_sym);
+class Board{
+
+    // Name:  constructor for board
+    // Author: Nick
+    // Date: 10/27/2024
+    // Preconditions: init_sym, sym1, sym2, board_array, board_res, board_stat
+    // Postconditions: Board object
+    constructor(init_sym, sym1, sym2, board_array, board_res, board_stat){
+        this.init_sym = init_sym; // Set the initial symbol
+        this.board_array = board_array; // Set the board array
+        this.sym1 = sym1; // Set symbol1
+        this.sym2 = sym2; // Set symbol2
+        this.board_res = board_res; // Set board result
+        this.board_stat = board_stat; // Set board status
+    }
+
+    // Name:  get_board_as_val
+    // Author: Nick
+    // Date: 10/27/2024
+    // Preconditions: self
+    // Postconditions: Array that represents the board    
+    get_board_as_val = (self) =>{
+        // Iterate through each position, and return the symbol that represents the srr
+        return self.board_array.map((sym)=>sym.symbol_str);
+    }
+
+    // Name: get_empty_pos
+    // Author: Nick
+    // Date: 10/27/2024
+    // Preconditions: self
+    // Postconditions: Get array of empty positions
+    get_empty_pos = (self) => {
+        // The first symbol
+        let init_sym_loc = self.init_sym;
+        let return_array = [];
+        let board_array_to_use = self.board_array;
+        for (let i = 0; i < board_array_to_use.length; i++){
+            // Iterate through the array and if the initial symbol is the symbol, append to empty
+            if (board_array_to_use[i].symbol_str == init_sym_loc.symbol_str){
+                return_array.push(i);
+            }
+        }
+        // Return the empty
+        return return_array;
+    }
+
+    // Name: check_for_win
+    // Author: Nick
+    // Date: 10/27/2024
+    // Preconditions: self
+    // Postconditions: Check if there is a win
+    check_for_win = (self) =>{
+        // Get empty position
+        let empty_pos = self.get_empty_pos(self);
+        // Board sa values
+        let board_as_val = self.get_board_as_val(self);
+        // Get empty synbol repr
+        let empty_sym_str = self.init_sym.symbol_str;
+        // Get symbol1 str
+        let sym1_str = self.sym1.symbol_str;
+        // Get the symbol2 str
+        let sym2_str = self.sym2.symbol_str;
+
+        function check_for_column(board_as_val_temp, sym1_str_temp, sym2_str_temp){
+            for (let col_index = 0; col_index < 3; col_index++){
+                // Iterate through each column
+                let sym1_count = 0;
+                let sym2_count = 0;
+                for (let row_index = 0; row_index < 3; row_index++){
+                    // Iterate through each row
+                    let pos_val = board_as_val_temp[col_index + 3*(row_index)]
+                    sym1_count += (+(pos_val === sym1_str_temp));
+                    sym2_count += (+(pos_val === sym2_str_temp));
+                }
+                // If any symbol gets full count, it's a win
+                if ((sym1_count == 3) || (sym2_count==3)){
+                    return true
+                } 
+            }
+            return false
+        }
+        // Name: check_for_row
+        // Author: Nick
+        // Date: 10/27/2024
+        // Preconditions: board_as_val_temp, sym1_str_temp, sym2_str_temp
+        // Postconditions: check for a row win (boolean)
+        function check_for_row(board_as_val_temp,  sym1_str_temp, sym2_str_temp){
+            for (let row_index = 0; row_index < 3; row_index++){
+                // Iterate through each row
+                let sym1_count = 0;
+                let sym2_count = 0;
+                for (let col_index = 0; col_index < 3; col_index++){
+                    // Iterate through each column
+                    let pos_val = board_as_val_temp[3*row_index + (col_index)]
+                    sym1_count += (+(pos_val === sym1_str_temp));
+                    sym2_count += (+(pos_val === sym2_str_temp));
+                }
+                // If any symbol gets full count, it's a win
+                if ((sym1_count == 3) || (sym2_count==3)){
+                    return true
+                } 
+            }
+            return false
+        }
+
+        // Name: check_for_diag
+        // Author: Nick
+        // Date: 10/27/2024
+        // Preconditions: board_as_val_temp, sym1_str_temp, sym2_str_temp
+        // Postconditions: check for a diagonal win (boolean)
+        function check_for_diag(board_as_val_temp, sym1_str_temp, sym2_str_temp){
+            for (let diag_index = 0; diag_index < 3; diag_index+=2){
+                // Iterate through each diagonal
+                let sym1_count = 0;
+                let sym2_count = 0;
+                for (let ran_cnt = 0; ran_cnt < 3; ran_cnt++){
+                    // iterate along the diagonal
+                    let pos_val = board_as_val_temp[diag_index + (ran_cnt*(4-diag_index))]
+                    sym1_count += (+(pos_val === sym1_str_temp));
+                    sym2_count += (+(pos_val === sym2_str_temp));
+                }
+                // If any symbol gets full count, it's a win
+                if ((sym1_count == 3) || (sym2_count==3)){
+                    return true
+                } 
+            }
+            return false
+        }
+
+        // Return column win or a row win or a diagonal win
+        return (check_for_column(board_as_val, sym1_str, sym2_str) || check_for_row(board_as_val, sym1_str, sym2_str) || check_for_diag(board_as_val, sym1_str, sym2_str));
+    }
+    // Perform a move
+    make_move = (symbol_, pos_, self) => {
+        self.board_array[pos_] = symbol_;
+    }
+    // Make a move, but return a new board to avoid mutation
+    make_move_copy = (symbol_, pos_, self) => {
+        // Initialize empty symbol
+        let empty_sym = new Symbol('0');
+        // Initialize X symbol
+        let x_sym = new Symbol('x');
+        // Initialize O symbol
+        let o_sym = new Symbol('o');
+
+        // Initialize board array
+        let board_arr = [];
+    
+        let board_main = self.board_array;
+        for (let index = 0; index < board_main.length; index++){
+            // Copy over the X moves
+            if (board_main[index].symbol_str == 'x'){
+                board_arr.push(x_sym);
+            }
+            // Copy over the O moves
+            else if (board_main[index].symbol_str == 'o'){
+                board_arr.push(o_sym);
+            }
+            else{
+                // Push the empty symbols
+                board_arr.push(empty_sym);
+            }
+
+        }
+        // Perform the new move
+        board_arr[pos_] = symbol_;
+        // Initialize and return the new board
+        let board_to_return = new Board(empty_sym, x_sym, o_sym, board_arr, 0, 0);
+        return board_to_return;
+    }
+    // Pretty print a board
+    printBoard=(self)=>{
+        alert(self.get_board_as_val(self).toString());
+    }
+    // Return which move was a win
+    get_which_win=(self)=>{
+            // Get boars as a value
+            let board_as_val = self.get_board_as_val(self);
+            // Get the first symbol str
+            let sym1_str = self.sym1.symbol_str;
+            // Get the second symbol str
+            let sym2_str = self.sym2.symbol_str;
+
+            // Name: check_for_column
+            // Author: Nick
+            // Date: 10/27/2024
+            // Preconditions: board_as_val_temp, sym1_str_temp, sym2_str_temp
+            // Postconditions: check for a column win (col-index)
+            function check_for_column(board_as_val_temp, sym1_str_temp, sym2_str_temp){
+                for (let col_index = 0; col_index < 3; col_index++){
+                    // Iterate through each column
+                    let sym1_count = 0;
+                    let sym2_count = 0;
+                    for (let row_index = 0; row_index < 3; row_index++){
+                        // Iterate through each row
+                        let pos_val = board_as_val_temp[col_index + 3*(row_index)]
+                        sym1_count += (+(pos_val === sym1_str_temp));
+                        sym2_count += (+(pos_val === sym2_str_temp));
+                    }
+                    // If any symbol gets full count, it's a win
+                    if ((sym1_count == 3) || (sym2_count==3)){
+                        // return string of index
+                        return `col-${col_index}`;
+                    } 
+                }
+                return false
+            }
+            // Name: check_for_row
+            // Author: Nick
+            // Date: 10/27/2024
+            // Preconditions: board_as_val_temp, sym1_str_temp, sym2_str_temp
+            // Postconditions: check for a row win (string or boolean)
+            function check_for_row(board_as_val_temp, sym1_str_temp, sym2_str_temp){
+                for (let row_index = 0; row_index < 3; row_index++){
+                    // Iterate through each row
+                    let sym1_count = 0;
+                    let sym2_count = 0;
+                    for (let col_index = 0; col_index < 3; col_index++){
+                        // Iterate through each column
+                        let pos_val = board_as_val_temp[3*row_index + (col_index)]
+                        sym1_count += (+(pos_val === sym1_str_temp));
+                        sym2_count += (+(pos_val === sym2_str_temp));
+                    }
+                    // If any symbol gets full count, it's a win
+                    if ((sym1_count == 3) || (sym2_count==3)){
+                        return `row-${row_index}`;
+                    } 
+                }
+                return false
+            }
+            // Name: check_for_diag
+            // Author: Nick
+            // Date: 10/27/2024
+            // Preconditions: board_as_val_temp, sym1_str_temp, sym2_str_temp
+            // Postconditions: check for a diagonal win (boolean)
+            function check_for_diag(board_as_val_temp,sym1_str_temp, sym2_str_temp){
+                for (let diag_index = 0; diag_index < 3; diag_index+=2){
+                    // Iterate through each diagonal
+                    let sym1_count = 0;
+                    let sym2_count = 0;
+                    for (let ran_cnt = 0; ran_cnt < 3; ran_cnt++){
+                        // iterate along the diagonal
+                        let pos_val = board_as_val_temp[diag_index + (ran_cnt*(4-diag_index))]
+                        sym1_count += (+(pos_val === sym1_str_temp));
+                        sym2_count += (+(pos_val === sym2_str_temp));
+                    }
+                    // If any symbol gets full count, it's a win
+                    if ((sym1_count == 3) || (sym2_count==3)){
+                        return `diag-${diag_index}`;
+                    } 
+                }
+                return false
+            }
+            // Return column win or a row win or a diagonal win
+            return (check_for_column(board_as_val, sym1_str, sym2_str) || check_for_row(board_as_val, sym1_str, sym2_str) || check_for_diag(board_as_val, sym1_str, sym2_str));
     }
 }
 
-// Function for AI to determine next best move
-function nextMove(board_state, comp_sym) {
-    let empty_pos_ = board_state.get_empty_pos(board_state); // Get empty board positions
-    let score_arr_state = [];
-
-    empty_pos_.forEach((pos, count) => {
-        let new_board = board_state.make_move_copy(comp_sym, pos, board_state); // Simulate new board state
-        score_arr_state.push(getScore(new_board, comp_sym, comp_sym)); // Evaluate each move's score
-    });
-
-    let max_score = Math.max(...score_arr_state);
-    return empty_pos_[score_arr_state.indexOf(max_score)];
-}
-
-// Board class for game board setup and operations
-class Board {
-    constructor(init_sym, sym1, sym2, board_array, board_res, board_stat) {
-        this.init_sym = init_sym; // Initial symbol, typically '0'
-        this.board_array = board_array; // Array representing board cells
-        this.sym1 = sym1; // Player 1 symbol, e.g., 'X'
-        this.sym2 = sym2; // Player 2 symbol, e.g., 'O'
-        this.board_res = board_res; // Result of the board
-        this.board_stat = board_stat; // Current status of the board
+// Symbol Utility class
+class Symbol{
+    constructor(symbol_str){
+        this.symbol_str = symbol_str;
     }
-
-    // Utility functions for board operations omitted for brevity
-}
-
-// Symbol class representing a game symbol, e.g., 'X' or 'O'
-class Symbol {
-    constructor(symbol_str) {
-        this.symbol_str = symbol_str; // Symbol string, e.g., 'X'
-    }
-    return_val = () => this.symbol_str; // Return symbol value
-}
-
-// Class representing an online user with a unique user ID
-class online_user {
-    constructor(online_user_id) {
-        this.online_user_id = online_user_id; // Unique user identifier
-        this.your_feed_index = 0; // Track user's feed index
-        this.your_posts_index = 0; // Track user's post index
-        this.liked_posts_index = 0; // Track user's liked posts index
+    return_val = () =>{
+        return this.symbol_str;
     }
 }
 
-// Initializing game symbols
+// Online User class
+class online_user{
+    constructor(online_user_id){
+        this.online_user_id = online_user_id;
+        this.your_feed_index = 0;
+        this.your_posts_index = 0;
+        this.liked_posts_index = 0;
+    }
+}
 const x_sym = new Symbol('x');
 const o_sym = new Symbol('o');
-const empty_sym = new Symbol('0'); // Empty cell symbol
+const empty_sym = new Symbol('0');
 
-// Socket.io event listeners for handling real-time user activity
-io.on('connection', socket => {
-    console.log('New WS Connection'); // New WebSocket connection message
-
-    socket.on('makeUserOnline', (userId) => {
-        User.findByIdAndUpdate(userId, { onlineState: 'true' }, (err, docs) => {
-            if (err) {
-                console.log(err);
-            } else {
+//Socket Commands:
+const User = require('./models/User');
+const { timeLog } = require('console');
+const req = require('express/lib/request');
+const { post } = require('./public/routes/index');
+let online_users = []; // Store all online users
+let socket_id_dict = {}; // Store all socket
+let players_rooms = []; // Store all player rooms
+let active_games = []; // Store all active games
+let active_players = new Set([]); // Store all active players
+let socket_id_dict_players = {};
+io.on('connection', socket=>{
+    // Main function handled on a connection
+    console.log('New WS Connection');
+    socket.on('makeUserOnline', (userId)=>{
+        // Make a user online
+        User.findByIdAndUpdate(userId, {onlineState: 'true'}, (err, docs)=>{
+            // Find the user by ID
+            if (err) { console.log(err);
+            }else{
+                // Update the user's online status
                 let temp_user = new online_user(userId);
-                online_users.push(temp_user); // Add user to online users list
-                socket_id_dict[socket.id] = userId; // Map socket ID to user ID
+                // update the online users active
+                online_users.push(temp_user);
+                // update socket for a user
+                socket_id_dict[socket.id] = userId;
             }
-        });
-    });
+        })});
     socket.on('disconnect', ()=>{
+            // Make a user offline
             User.findByIdAndUpdate(socket_id_dict[socket.id], {onlineState: 'false'}, (err, docs)=>{
                 if (err) { console.log(err);
                 }else{
                     if (docs){
+                    // Find the user in the online users
                     let index_of_user = online_users.findIndex((elem) => {elem.online_user_id === socket_id_dict[socket.id]})
-                    online_users.splice(index_of_user);
+                    online_users.splice(index_of_user); // Remove the user from the online user
                     let name_ = docs.name;
                     let room_name_pos = `${docs._id}--|--${docs.name}`;
+                    // Get all the player rooms which the user is part of
                     if (players_rooms.includes(room_name_pos)){
+                        // Append the player room to the list after finding
                         let index_in_pr = players_rooms.indexOf(room_name_pos);
                         players_rooms.splice(index_in_pr);
                     }
                 }
                 }
             })
+            // Get the id of user disconnected
             let user_disconnected = socket_id_dict_players[socket.id];
 
             for (let temp_counter_2  = 0; temp_counter_2 < active_games.length; temp_counter_2++){
-                let temp_pl_1_id = active_games[temp_counter_2].player1_user_id;
-                let temp_pl_1_name = active_games[temp_counter_2].player1;
-                let temp_pl_2_name = active_games[temp_counter_2].player2;
-                let temp_pl_2_id = active_games[temp_counter_2].player2_user_id;
-                let current_player = active_games[temp_counter_2].current_player;
-                if ((temp_pl_1_id === user_disconnected) || (temp_pl_2_id === user_disconnected)){
-                    if (active_games[temp_counter_2].current_result === 0){
-                            if ((temp_pl_1_id === user_disconnected)){
-                                active_games[temp_counter_2].current_result = 'P2';
+                // Iterate through active games
+                let temp_pl_1_id = active_games[temp_counter_2].player1_user_id; // ID of player 1
+                let temp_pl_1_name = active_games[temp_counter_2].player1; // Name of player 1
+                let temp_pl_2_name = active_games[temp_counter_2].player2; // ID of player 2 
+                let temp_pl_2_id = active_games[temp_counter_2].player2_user_id; // Name of player 2
+                let current_player = active_games[temp_counter_2].current_player; // Get the current player
+                if ((temp_pl_1_id === user_disconnected) || (temp_pl_2_id === user_disconnected)){ // If any of the plaer was disconnected proceed
+                    if (active_games[temp_counter_2].current_result === 0){ // if result is decided, update stats
+                            if ((temp_pl_1_id === user_disconnected)){ // If the player 1 is disconnected, proceed
+                                active_games[temp_counter_2].current_result = 'P2'; // Set player 2 as the current result
+                                // Append the player1's game result after finding by iD
                                 User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"L"}}}, (err, follower_)=>{
                                     if(err){
                                         console.log(err);
                                     }
-                                })
+                                });
+                                // Append the player2's game result after finding by iD
                                 User.findByIdAndUpdate(temp_pl_2_id, {$push: {'games':{'opponent': temp_pl_1_id, 'me_first_player': false, 'opponent_name':temp_pl_1_name, result:"W"}}}, (err, follower_)=>{
                                     if(err){
                                         console.log(err);
                                     }
                                 })
+                                // Update the win, loss, draw, count stats
                                 updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'P2', 0);
                             }else{
-                                active_games[temp_counter_2].current_result = 'P1';
+                                active_games[temp_counter_2].current_result = 'P1';  // Set player 1 as the current result
+                                // Append the player1's game result after finding by iD
                                 User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"W"}}}, (err, follower_)=>{
                                     if(err){
                                         console.log(err);
                                     }
                                 })
+                                // Append the player2's game result after finding by iD
                                 User.findByIdAndUpdate(temp_pl_2_id, {$push: {'games':{'opponent': temp_pl_1_id, 'me_first_player': false, 'opponent_name':temp_pl_1_name, result:"L"}}}, (err, follower_)=>{
                                     if(err){
                                         console.log(err);
                                     }
                                 })
+                                // Update the win, loss, draw, count stats
                                 updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'P1', 0);
 
                             }
+                            // Emit the disconnected result
                             io.to(active_games[temp_counter_2].room_name).emit('dis-result','0');
+                            // Leave the sockect
                             io.socketsLeave(active_games[temp_counter_2].room_name);
+                            // Remove the game from the active game
                             active_games.splice(temp_counter_2);
+                            // Delete active player1
                             active_players.delete(temp_pl_1_id);
+                            // Delete active player2
                             active_players.delete(temp_pl_2_id);
 
 
                         }
                     else{
+                        // Simply emit disconnect
                         io.to(active_games[temp_counter_2].room_name).emit('other-dis','0');
+                        // Leave the sockect
                         io.socketsLeave(active_games[temp_counter_2].room_name);
+                        // Remove the game from the active game
                         active_games.splice(temp_counter_2);
-                            active_players.delete(temp_pl_1_id);
-                            active_players.delete(temp_pl_2_id);
+                        // Delete active player1
+                        active_players.delete(temp_pl_1_id);
+                        // Delete active player2
+                        active_players.delete(temp_pl_2_id);
 
                 }
                 }
             }
         });
 
+    // Handle connecting with someone
     socket.on('connect_with_someone', (user)=>{
+        // Set a random timeout for race conditions
         setTimeout(()=>{},Math.floor(Math.random()*3000));
+        // Store socket id
         socket_id_dict_players[socket.id] = user.user_id;
         if (players_rooms.length === 0){
+            // Create a player room and push the user
             players_rooms.push(`${user.user_id}--|--${user.user_name}`);
+            // Join the user room
             socket.join(`${user.user_id}`);
             }
             else{
+            // Otherwise, wait for a connection
             if (players_rooms.includes(`${user.user_id}--|--${user.user_name}`)){
+                // Emit waiting on a connection
                 socket.emit('msg', "Please wait for a connection");
             }else{
+                // Get room to join
                 let room_to_join = players_rooms[0];
+                // Remove player oom
                 players_rooms.splice([0]);
+                // Get other player name
                 let other_player_name = room_to_join.split('--|--')[1];
+                // Get my name
                 let my_name = user.user_name;
+                // Get room number
                 let room_num =  room_to_join.split('--|--')[0];
+                // Join the room
                 socket.join(`${room_num}`);
+                // Set the players
                 let player1 = other_player_name;
                 let player2 = my_name;
+                // To the room, emit multi-player-connect
                 io.to(room_num).emit('multi-player-connect', `${player1}---|---${player2}---|---${room_num}---|---${user.user_id}`);
+                // Add the active players
                 active_players = new Set([...active_players, user.user_id, room_num]);
-
+                // Create an active game
                 let active_game_instance = new active_game(player1, player2, room_num, user.user_id, room_num);
+                // Create a new board state
                 let new_board_state = new Board(empty_sym, x_sym, o_sym, [empty_sym, empty_sym, empty_sym, empty_sym, empty_sym, empty_sym, empty_sym, empty_sym, empty_sym]);
+                // Set the board state to active game
                 active_game_instance.board_state = new_board_state;
+                // Get the state payload
                 let temp_obj_t = {
                     'current_turn': 1,
                     'but-enable': true,
@@ -289,23 +640,29 @@ io.on('connection', socket => {
                     'but_9': '',
                     'msg': 'You can chat here!'
                 }
+                // Send the object to frontend for rendering
                 io.to(room_num).emit('web-render-msg', temp_obj_t)
+                // Set the last object
                 active_game_instance.last_obj = JSON.parse(JSON.stringify(temp_obj_t));
+                // Set active game
                 active_games.push(active_game_instance);
             }
         }
 
-    })
+    });
+    // Handle removing from connect line
     socket.on('remove-from-connect-line', (user_info)=>{
+        // Remove from the player room after finding
         let index_in_player_rooms = players_rooms.indexOf(`${user_info.user_id}--|--${user_info.user_name}`);
         players_rooms.splice(index_in_player_rooms);
     })
+    //function of managing the move of the live player in the tic-tac-toe game, updating the game board and rendering the player's move in a game room.
     function make_move_render(room_number, game_active, current_board, move_sym, move_index, current_turn_){
-        current_board.make_move(move_sym, move_index, current_board);
-        let current_turn = current_turn_;
-        game_active.current_player = current_turn;
-        let temp_board_state = current_board.get_board_as_val(current_board);
-        let init_obj = {
+        current_board.make_move(move_sym, move_index, current_board); //update the game board according to player's mov
+        let current_turn = current_turn_;  //set the given turn value to the current turn
+        game_active.current_player = current_turn;  //update the current player
+        let temp_board_state = current_board.get_board_as_val(current_board); //return an array of values representing the state of the current board
+        let init_obj = { //initialize an object to hold the sate of current game for rendering
         'current_turn': current_turn,
         'but_1': '',
         'but_2': '',
@@ -317,40 +674,52 @@ io.on('connection', socket => {
         'but_8': '',
         'but_9': '',
         'msg': ''}
+        // loop for assigning the appropriate button in the render object of the game board state
         for (let temp_counter = 0; temp_counter < 9; temp_counter++){
             if (temp_board_state[temp_counter] === '0'){
+                //if the current position is empty, return an empty string
                 init_obj[`but_${temp_counter+1}`] = '';
             }else if(temp_board_state[temp_counter] === 'x'){
+                //else if the current position is 'x', then set the button to 'X'
                 init_obj[`but_${temp_counter+1}`] = 'X';
             }else{
+                //otherwise, set the button to 'O'
                 init_obj[`but_${temp_counter+1}`] = 'O';
             }
 
     }
+    //report the updating of the board state to clients for rendering
     io.to(room_number).emit('web-render-msg', init_obj)
+    //save the last board state for the fame session
     game_active.last_obj = JSON.parse(JSON.stringify(init_obj));
+    //check if there is any win condition on the board exists
     let isWin = current_board.check_for_win(current_board);
+     //assign empty positions
     let empty_pos = current_board.get_empty_pos(current_board);
+     //retrieves the IDs and names of both players from the game_active object in the event of win or draw
     let temp_pl_1_id = game_active.player1_user_id;
     let temp_pl_2_id = game_active.player2_user_id;
     let temp_pl_1_name = game_active.player1;
     let temp_pl_2_name = game_active.player2;
-    if (isWin){
-        if (current_turn === 2){
-            io.to(room_number).emit('result_here', {result: 'P1', string: current_board.get_which_win(current_board)})
-            game_active.current_result = 'P1';
+    if (isWin){ //handle the moves in the game when a win condition is detected
+        if (current_turn === 2){ //in case the current turn belongs to player 1, then they are the winner
+            //announce that player 1 is the winner and broadcast the result to clients
+            io.to(room_number).emit('result_here', {result: 'P1', string: current_board.get_which_win(current_board)});
+            game_active.current_result = 'P1'; //update the game state that player 1 is the winner
+            //Update the database with the game results
             User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"W"}}}, (err, follower_)=>{
                 if(err){
-                    console.log(err);
+                    console.log(err); //if there is error occur, log all errors in the updating player 1's win record
                 }
             })
             User.findByIdAndUpdate(temp_pl_2_id, {$push: {'games':{'opponent': temp_pl_1_id, 'me_first_player': false, 'opponent_name':temp_pl_1_name, result:"L"}}}, (err, follower_)=>{
                 if(err){
-                    console.log(err);
+                    console.log(err); //if there is error occur, log all errors in the updating player 2's loss record
                 }
             })
-            updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'P1', 0);
-        }else{
+            updateWLDGcount(temp_pl_1_id, temp_pl_2_id, 'P1', 0); //update the counters by calling a function, indicating that player 1 won 
+        }else{ 
+            // in case it's player 2's turn, then they are the winner
             io.to(room_number).emit('result_here', {result: 'P2', string: current_board.get_which_win(current_board)})
             game_active.current_result = 'P2';
             User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"L"}}}, (err, follower_)=>{
@@ -367,14 +736,17 @@ io.on('connection', socket => {
     }
 
     }else{
-        if(empty_pos.length === 0){
+        // in case there is no winner, check in the draw if the have has ended 
+        if(empty_pos.length === 0){ //in case there is no more spaces left on the board, report the draw result to clients in the game room
             io.to(room_number).emit('result_here', {result: 'D', string: "none"})
-            game_active.current_result = 'D';
+            game_active.current_result = 'D'; //set the game state to reflect a draw
+            // Update the database to reflect the draw for player 1
             User.findByIdAndUpdate(temp_pl_1_id, {$push: {'games':{'opponent': temp_pl_2_id, 'me_first_player': true, 'opponent_name':temp_pl_2_name, result:"D"}}}, (err, follower_)=>{
                 if(err){
                     console.log(err);
                 }
-            })
+            });
+            // Update the database to reflect the draw for player 2
             User.findByIdAndUpdate(temp_pl_2_id, {$push: {'games':{'opponent': temp_pl_1_id, 'me_first_player': false, 'opponent_name':temp_pl_1_name, result:"D"}}}, (err, follower_)=>{
                 if(err){
                     console.log(err);
@@ -915,7 +1287,7 @@ io.on('connection', socket => {
                     'they_follow': check_for_val(my_followers, following.userId),    // Check if the followed user is in requesting user's followers
                     'i_follow': check_for_val(my_following, following.userId)    // Check if the followed user is in requesting user's following
                 };
-                }})
+                });
 
                 // Populate the followers and following arrays in the return object
                 obj_to_return.followers_ = JSON.parse(JSON.stringify(other_follower_obj_arr));
@@ -1102,13 +1474,12 @@ io.on('connection', socket => {
                                 "other_person_name": other_person_name,    // Name of the other person
                                 "room_name": room_dm_msg,    // The room for direct messaging
                                 "message_content": [
-                                    {
+                                        {
                                         'sender_name': my_name,    // Name of the sender
                                         'sender_id': sender_dm_id,    // ID of the sender
                                         'date_of_message': moment().format('MMMM Do YYYY, h:mm a'),    // Timestamp of the message
                                         'message_text': dm_msg_content    // The actual content of the message
-                    }
-                                    }
+                                        }
                                 ]
                             }
 
@@ -1252,9 +1623,7 @@ io.on('connection', socket => {
         // TODO: Implement this
         socket.emit('post-notif-array', []);    // Emitting a placeholder empty array for now
 });
-    })
-
-})
+});
 
 
 // Function to update the Win, Loss, Draw (WLD) count for two players after a game
