@@ -1016,13 +1016,98 @@ io.on('connection', socket=>{
 
     socket.on('connect-with-computer', (user)=>{ //listen for a 'connect-with-computer' event and take a user object as an argument
         console.log("requesting to connect with a computer");
-        // TODO: Implement this
+        let user_id = user.user_id; // Get the user id
+        let user_name = user.user_name; // Get the user name
+        let user_opt = user.opt; // Get the user options
+        // Initialize a new board
+        let new_board_state = new Board(empty_sym, x_sym, o_sym, [empty_sym, empty_sym, empty_sym, empty_sym, empty_sym, empty_sym, empty_sym, empty_sym, empty_sym]);
+        let new_game; // Declare a new game
+        let player1; // Declare first player
+        let player2; // Declare second player
+
+        let rand_num = Math.random();
+        if (rand_num > 0.5){
+            // Make a new game with computer as the first player, and user as the second player
+            new_game = new active_game('COMPUTER-BOT-HERE', user_name, 'COMPUTER-BOT-HERE', user_id);
+            player2 = user_name; // Set user as the second player
+            player1 = 'Computer Bot'; // Set the computer as the first player
+        }else{
+            // Make a new game with user as the first player, and the computer as the second player
+            new_game = new active_game(user_name, 'COMPUTER-BOT-HERE', user_id, 'COMPUTER-BOT-HERE');
+            player1 = user_name; // Set user as the first player
+            player2 = 'Computer Bot'; // Set computer as the second player
+        }
+
+        new_game.board_state = new_board_state; // Set the board state
+        new_game.isWithComp = true; // Set the fact that game is against a  bot
+        active_games.push(new_game); // Push into active games
+        socket.join(`${user_id}`); // Join the room
+        new_game.room_name = `${user_id}`; // Set the room name
+        console.log('Clients in this room: ', io.sockets.adapter.rooms.get(new_game.room_name));
+        //const players_in_this_room = io.sockets.adapter.rooms.get(user_id);
+        active_players = new Set([...active_players, user_id]); // Set the active players
+        // Send a message to the client
+        io.to(`${user_id}`).emit('computer-connect', `${player1}---|---${player2}`);
+        // Declare button status
+        let temp_obj_t = {
+            'current_turn': 1,
+            'but-enable': true,
+            'but_1': '',
+            'but_2': '',
+            'but_3': '',
+            'but_4': '',
+            'but_5': '',
+            'but_6': '',
+            'but_7': '',
+            'but_8': '',
+            'but_9': '',
+            'msg': 'Good Luck Defeating The Bot!'
+        }
+        // Send the render
+        io.to(`${user_id}`).emit('web-render-msg', temp_obj_t);
+        // Deep copy the last state object
+        new_game.last_obj = JSON.parse(JSON.stringify(temp_obj_t));
+        // If player is the computer 1
+        if (player1 === 'Computer Bot'){
+            // Set current player as second
+            new_game.current_player = 2;
+            // Get current board
+            current_board = new_game.board_state;
+            // Do a random first move
+            current_board.make_move(o_sym, 4, current_board);
+            // Get the board state
+            let temp_board_state = current_board.get_board_as_val(current_board);
+            let init_obj = {
+            'current_turn': 2,
+            'but_1': '',
+            'but_2': '',
+            'but_3': '',
+            'but_4': '',
+            'but_5': '',
+            'but_6': '',
+            'but_7': '',
+            'but_8': '',
+            'but_9': '',
+            'msg': ''};
+            for (let temp_counter = 0; temp_counter < 9; temp_counter++){
+                // Set the state in init object
+                if (temp_board_state[temp_counter] === '0'){
+                    init_obj[`but_${temp_counter+1}`] = '';
+                }else if(temp_board_state[temp_counter] === 'x'){
+                    init_obj[`but_${temp_counter+1}`] = 'X';
+                }else{
+                    init_obj[`but_${temp_counter+1}`] = 'O';
+                }
+
+        }
+        io.to(`${user_id}`).emit('web-render-msg', init_obj)
+        }
     });
 
-    socket.on('chat-msg-user', (msg)=>{ //listen for a 'chat-msg-user' event and takes a message object as an argument
-        // TODO: Implement this
+    socket.on('chat-msg-user', (msg)=>{
+        // TODO
+    });
 
-    })
     socket.on('user-post-request', (post_ )=>{
         let post_user_id = post_.user_id; //extract the user ID of the poster from the received object
         let poster_name = ''; //initialize an empty string to hold the name of the poster.
@@ -1194,8 +1279,39 @@ io.on('connection', socket=>{
     // Event listener for when a client requests to change a post's liked status
     socket.on('change_post_liked_stat', (msg_stuff)=>{
        console.log("requesting to change post like;");
-       // TODO: Implement this
-    })
+       let is_liked = msg_stuff.is_liked; // Whether liked
+       let post_id = msg_stuff.post_id; //  post id
+       let user_id = socket_id_dict[socket.id]; //  user id
+       let poster_id = post_id.split('***')[0]; // poster id
+       let modified_like_count = is_liked ? -1 : 1; // on liked, it's a disklike
+    
+       // Get the record's like posts
+       User.findByIdAndUpdate(user_id, {$pull: {'liked_posts':post_id}}, (err, docs)=>{
+
+        // Get the post
+        User.findById(poster_id, (err, docs)=>{
+            // Add the new liked post
+            let posts_arr = [...docs.posts];
+            // Get the post filtered
+            let post_filtered_arr = posts_arr.filter((post_f)=>{return (post_f.post_id_u === post_id)});
+            // Get the first post matching ID
+            let post_filtered = post_filtered_arr[0];
+            // Get the current like count
+            let current_like_count = +(post_filtered.like_count);
+            // Adjust the new liek count
+            let new_like_count = current_like_count + modified_like_count;
+            // Update the record's like count
+            User.findOneAndUpdate({'_id':poster_id, "posts.post_id_u":post_id},{
+                "$set":{
+                    "posts.$.like_count": new_like_count
+                }
+            }, (err, docs)=>{
+                // Emit like changed emit
+                socket.emit("like-changed");
+            })
+        })
+        });
+    });
 
     // Event listener for checking if a user is currently active in a game
     socket.on('chk_for_cur_active', (user_id_to_check)=>{
@@ -1543,7 +1659,7 @@ io.on('connection', socket=>{
     // Socket event for removing a follower (implementation needed)
     socket.on('remove-follower', (rec_obj)=>{
         // TODO: Implement this
-    })
+    });
 
     // Socket event for following another user
     socket.on('make-user-follow', (some_obj)=>{
@@ -1614,15 +1730,35 @@ io.on('connection', socket=>{
 
     // Socket event to get the notification count for a specific user
     socket.on('get-user-notif-count', (user_id)=>{
-        // TODO: Implement this
-        socket.emit('post-user-notif-count', 0);    // Emitting a placeholder value of 0 for now
-    })
+        // Get the user by id
+        User.findById(user_id, (err, docs)=>{
+            if(err){
+                // Log in case of error
+                console.log(err);
+            }else{
+            // Emit notification count
+            socket.emit('post-user-notif-count', docs.notif_count);
+            }
+        })
+    });
 
     // Socket event to retrieve the array of notifications for a specific user
     socket.on('get-notif-array', (user_id)=>{
-        // TODO: Implement this
-        socket.emit('post-notif-array', []);    // Emitting a placeholder empty array for now
-});
+        // Get the user
+        User.findById(user_id, (err, docs)=>{
+            if(err){
+                // Log in case of error
+                console.log(err);
+            }else{
+                // Copy the notificaitons
+                let notif_array_c = [...docs.notifications];
+                // Reverse the notifications
+                let notif_array_return = notif_array_c.reverse();
+                // Emit the notificaiton
+                socket.emit('post-notif-array', notif_array_return);
+            }
+        })
+    });
 });
 
 
