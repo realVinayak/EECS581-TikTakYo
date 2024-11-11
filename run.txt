@@ -1,0 +1,5 @@
+Run the following command:
+
+docker build -t tiktakyo .
+
+docker run --env-file .env -p 0.0.0.0:8000:2000 tiktakyo
