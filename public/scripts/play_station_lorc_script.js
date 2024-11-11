@@ -6,295 +6,382 @@ Outputs: None
 Author: Zach Alwin, Kristin Boeckmann, Lisa Phan, Nicholas Hausler, Vinayak Jha
 Creation Date: 10/27/2024
  */
+// Establish a connection to the server via socket.io
 const socket = io();
+
+// Emit the player type and check the current active player with the server
 socket.emit('player-type', isLive);
 socket.emit('chk_for_cur_active', user_id);
-let me_first_player;
-let other_player_name_glob;
-let global_prev_game = false;
-let glob_current_user = 0;
+
+// Declare variables for game state and player information
+let me_first_player; // To track if the current player is going first
+let other_player_name_glob; // To store the name of the other player
+let global_prev_game = false; // To check if there was a previous game
+let glob_current_user = 0; // To store the current user ID
+
+// Check if the game is live and not in 'false' mode
 if (!(isLive == 'false')){
-document.getElementById('connect-another-user').addEventListener('click', ()=>{
-    if ((result_declared && global_prev_game) || ((!result_declared)&&(!global_prev_game))){
-        socket.emit('connect_with_someone', {user_id, user_name});
-        document.querySelector('.connecting-overlay').style.display = 'block';
-    }
-    if (global_prev_game && (result_declared)){  
-        change_globals();
-        socket.emit('remove-from-prev-game', {user_id});
-    }
+    // Add event listener to the 'connect-another-user' button
+    document.getElementById('connect-another-user').addEventListener('click', ()=>{
+
+        // If a result is declared and there's a previous game, or if no result and no previous game, connect to another user
+        if ((result_declared && global_prev_game) || ((!result_declared)&&(!global_prev_game))){
+            socket.emit('connect_with_someone', {user_id, user_name}); // Emit to connect with someone
+            document.querySelector('.connecting-overlay').style.display = 'block'; // Show connecting overlay
+        }
+
+        // If there's a previous game and a result was declared, reset the game globals
+        if (global_prev_game && (result_declared)){  
+            change_globals(); // Reset game state
+            socket.emit('remove-from-prev-game', {user_id}); // Notify server to remove from previous game
+        }
     })
 }else{
+    // If not live, set up the buttons to connect to computer
     document.getElementById('o-option').addEventListener('click', ()=>{
+
+        // Hide the computer play options overlay
         document.querySelector('.comp-play-opt-overlay').style.display = 'none';
+
+        // Emit to connect with computer as 'O' player
         socket.emit('connect-with-computer', {user_id, user_name, opt: 'o'})
+
+        // Show the connecting overlay
         document.querySelector('.connecting-overlay').style.display = 'block';
     })
+    // Set up listener for 'X' option to play against computer
     document.getElementById('x-option').addEventListener('click', ()=>{
-        document.querySelector('.comp-play-opt-overlay').style.display = 'none';
-        socket.emit('connect-with-computer', {user_id, user_name, opt: 'x'})
-        document.querySelector('.connecting-overlay').style.display = 'block';
+        document.querySelector('.comp-play-opt-overlay').style.display = 'none'; // Hide overlay
+        socket.emit('connect-with-computer', {user_id, user_name, opt: 'x'}) // Emit to connect as 'X'
+        document.querySelector('.connecting-overlay').style.display = 'block'; // Show connecting overlay
     })
+    // Set up listener for random option to play against computer
     document.getElementById('ran-option').addEventListener('click', ()=>{
-        document.querySelector('.comp-play-opt-overlay').style.display = 'none';
-        socket.emit('connect-with-computer', {user_id, user_name, opt: 'ran'})
-        document.querySelector('.connecting-overlay').style.display = 'block';
+        document.querySelector('.comp-play-opt-overlay').style.display = 'none'; // Hide overlay
+        socket.emit('connect-with-computer', {user_id, user_name, opt: 'ran'}) // Emit random option to connect
+        document.querySelector('.connecting-overlay').style.display = 'block'; // Show connecting overlay
     })
+    // Listener for 'connect-with-computer' button click to show options
     document.getElementById('connect-with-computer').addEventListener('click', ()=>{
+        // If result is declared and there's a previous game or both are false, show the overlay
         if ((result_declared && global_prev_game) || ((!result_declared)&&(!global_prev_game))){
-                    document.querySelector('.comp-play-opt-overlay').style.display = 'block';
+            document.querySelector('.comp-play-opt-overlay').style.display = 'block'; // Show overlay
         }
+        // If there's a previous game and result declared, reset game globals
         if (global_prev_game && (result_declared)){  
-            change_globals();
-            socket.emit('remove-from-prev-game', {user_id});
+            change_globals(); // Reset game state
+            socket.emit('remove-from-prev-game', {user_id}); // Remove player from previous game
         }
         
     });
 }
+
+// Listener for 'connect-cancel' button to cancel the connection
 document.getElementById('connect-cancel').addEventListener('click', ()=>{
-    socket.emit('remove-from-connect-line', {user_id, user_name});
-    document.querySelector('.connecting-overlay').style.display = 'none';
+    socket.emit('remove-from-connect-line', {user_id, user_name}); // Notify server to cancel connection
+    document.querySelector('.connecting-overlay').style.display = 'none'; // Hide connecting overlay
 })
+
+// Function to reset global variables for a new game
 function change_globals(){
     for (let t_c1 = 0; t_c1 < 9; t_c1++){
-        but_clicked[t_c1] = 0;
-        document.getElementById(`but${t_c1+1}`).innerHTML = '';
+        but_clicked[t_c1] = 0; // Reset button click state
+        document.getElementById(`but${t_c1+1}`).innerHTML = ''; // Clear button text
     }   
-    result_declared = false;
-    glob_my_turn = false;
-    document.querySelector('.message-area').innerHTML = '';
-}
-let but_clicked = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-let glob_my_turn;
-let result_declared = false;
-socket.on('multi-player-connect', (msg)=>{
-    let names_of_players = msg.split('---|---');
-    let player_1 = names_of_players[0];
-    let player_2 = names_of_players[1];
-    let player_1_id = names_of_players[2];
-    let player_2_id = names_of_players[3];
-    let other_player;
-    let other_player_id;
-    document.querySelector('.connecting-overlay').style.display = 'none';
-    if (user_name === player_1){
-        showMsg(`You have been connected to ${player_2}. You go First`);
-        other_player = player_2;
-        other_player_id = player_2_id;
-        me_first_player = true;
-        glob_my_turn = true;
-    }else{
-        showMsg(`You have been connected to ${player_1}. You go Second`);
-        other_player = player_1;
-        other_player_id = player_1_id;
-        me_first_player = false;
-        glob_my_turn = false;
-    }
-    document.querySelector('.me_player').textContent = 'You';
-    document.querySelector('.other_player').innerHTML = `<span class="post-profile-show" id="${other_player_id}">${other_player}</span>`;
-    other_player_name_glob = other_player;
-    addEL(user_id);
-})
-function addEL(input_user_id){
-    let pps_elem = document.querySelector('.post-profile-show');
-    pps_elem.addEventListener('click', ()=>{
-        showProfile(pps_elem.id, input_user_id);
-        glob_current_user = pps_elem.id;
-    })
-}
-function showProfile(user_id_profile, my_id){
-    socket.emit('give-user-data', {"my_id": my_id, "user_id_profile": user_id_profile});
+    result_declared = false; // Reset result declaration
+    glob_my_turn = false; // Reset turn state
+    document.querySelector('.message-area').innerHTML = ''; // Clear message area
 }
 
-function addMessage(msg_to_add){
-    const div_to_add = document.createElement('div');
-    div_to_add.className = 'messages';
-    div_to_add.textContent = msg_to_add;
-    const parentDiv = document.querySelector('.message-area');
-    parentDiv.appendChild(div_to_add);
+// Declare an array to track button clicks
+let but_clicked = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+// Declare variables for turn and result states
+let glob_my_turn; 
+let result_declared = false; 
+
+// Listen for the 'multi-player-connect' event from the server
+socket.on('multi-player-connect', (msg)=>{
+    let names_of_players = msg.split('---|---'); // Split the player data from the message
+    let player_1 = names_of_players[0]; // Player 1 name
+    let player_2 = names_of_players[1]; // Player 2 name
+    let player_1_id = names_of_players[2]; // Player 1 ID
+    let player_2_id = names_of_players[3]; // Player 2 ID
+    let other_player;
+    let other_player_id;
+    
+    document.querySelector('.connecting-overlay').style.display = 'none'; // Hide the connecting overlay
+
+    // Check which player the current user is and set game state accordingly
+    if (user_name === player_1){
+        showMsg(`You have been connected to ${player_2}. You go First`); // Show message that the user is Player 1
+        other_player = player_2; // Set the other player
+        other_player_id = player_2_id; // Set the other player's ID
+        me_first_player = true; // Current player goes first
+        glob_my_turn = true; // Set turn to true for the current player
+    }else{
+        showMsg(`You have been connected to ${player_1}. You go Second`); // Show message that the user is Player 2
+        other_player = player_1; // Set the other player
+        other_player_id = player_1_id; // Set the other player's ID
+        me_first_player = false; // Current player goes second
+        glob_my_turn = false; // Set turn to false for the current player
+    }
+    
+    // Update the UI with the player names
+    document.querySelector('.me_player').textContent = 'You'; // Set current player label to "You"
+    document.querySelector('.other_player').innerHTML = `<span class="post-profile-show" id="${other_player_id}">${other_player}</span>`; // Show other player's name
+
+    // Store the name of the other player globally
+    other_player_name_glob = other_player;
+
+    // Add event listener to view the profile of the other player
+    addEL(user_id);
+})
+
+// Function to add event listener for profile viewing
+function addEL(input_user_id){
+    let pps_elem = document.querySelector('.post-profile-show'); // Select the element to view profile
+    pps_elem.addEventListener('click', ()=>{
+        showProfile(pps_elem.id, input_user_id); // Call showProfile to display profile of the clicked player
+        glob_current_user = pps_elem.id; // Update the global current user ID
+    })
 }
+
+// Function to show the profile of a user
+function showProfile(user_id_profile, my_id){
+    socket.emit('give-user-data', {"my_id": my_id, "user_id_profile": user_id_profile}); // Emit to the server to fetch user data
+}
+
+// Function to add a new message to the message area
+function addMessage(msg_to_add){
+    const div_to_add = document.createElement('div'); // Create a new div element
+    div_to_add.className = 'messages'; // Assign class name for styling
+    div_to_add.textContent = msg_to_add; // Set the text content to the passed message
+    const parentDiv = document.querySelector('.message-area'); // Get the message area container
+    parentDiv.appendChild(div_to_add); // Append the new message to the message area
+}
+
+// Loop to add click event listeners for the buttons with ids 'but1' through 'but9'
 for (let counter = 1; counter < 10; counter++){
-    let but_id = `but${counter}`;
-    const but_elem = document.getElementById(but_id);
+    let but_id = `but${counter}`; // Create button id dynamically
+    const but_elem = document.getElementById(but_id); // Get the button element by id
     but_elem.addEventListener('click', ()=>{
-        if (!result_declared){
-        if(but_clicked[counter-1] === 0){
-        socket.emit('make-this-move', {user_id, counter});
+        if (!result_declared){ // If the game result is not declared
+        if(but_clicked[counter-1] === 0){ // Check if the button has not been clicked already
+        socket.emit('make-this-move', {user_id, counter}); // Emit the move to the server
         }
     }
     })
 }
 
+// Loop to add mouseenter and mouseleave event listeners for buttons
 for (let counter = 1; counter < 10; counter++){
-    let but_id = `but${counter}`;
-    const but_elem = document.getElementById(but_id);
+    let but_id = `but${counter}`; // Create button id dynamically
+    const but_elem = document.getElementById(but_id); // Get the button element by id
+    
+    // Mouse enter event to highlight the button and show symbol
     but_elem.addEventListener('mouseenter', ()=>{
-        if (but_clicked[counter-1] === 0){
-            if(!result_declared){
-            if (glob_my_turn){
-            if (me_first_player){
-                but_elem.innerHTML = 'O';
-                but_elem.style.backgroundColor = "#a13333bd"
-            }else{
-                but_elem.style.backgroundColor = "#a13333bd"
-                but_elem.innerHTML = 'X';
+        if (but_clicked[counter-1] === 0){ // If the button hasn't been clicked
+            if(!result_declared){ // If the game result is not declared
+            if (glob_my_turn){ // If it's the user's turn
+            if (me_first_player){ // If the user is the first player
+                but_elem.innerHTML = 'O'; // Set 'O' symbol
+                but_elem.style.backgroundColor = "#a13333bd" // Set background color for 'O'
+            }else{ // If the user is the second player
+                but_elem.style.backgroundColor = "#a13333bd" // Set background color for 'X'
+                but_elem.innerHTML = 'X'; // Set 'X' symbol
             }
         }
     }
         }
     });
+
+    // Mouse leave event to remove the symbol and reset the button color
     but_elem.addEventListener('mouseleave', ()=>{
-        if (but_clicked[counter-1] === 0){
-            but_elem.innerHTML = '';
+        if (but_clicked[counter-1] === 0){ // If the button hasn't been clicked
+            but_elem.innerHTML = ''; // Clear the button's inner HTML
         }
-        but_elem.style.backgroundColor = "#A13333";
+        but_elem.style.backgroundColor = "#A13333"; // Reset the button background color
     });
 }
 
-socket.on('web-render-msg', (web_render_stuff=>{
+// Listen for the server's message to update the game state (e.g., moves made)
+socket.on('web-render-msg', (web_render_stuff)=>{
     for (let counter = 1; counter < 10; counter++){
-        let but_id = `but${counter}`;
-        document.getElementById(but_id).innerHTML = web_render_stuff[`but_${counter}`];
-        let temp_inner_html = document.getElementById(but_id).innerHTML;
-        if (temp_inner_html === 'X' || temp_inner_html === 'O'){
-            but_clicked[counter-1] = 1;
+        let but_id = `but${counter}`; // Create button id dynamically
+        document.getElementById(but_id).innerHTML = web_render_stuff[`but_${counter}`]; // Update button's inner HTML based on server's state
+        let temp_inner_html = document.getElementById(but_id).innerHTML; // Get the button's current content
+        if (temp_inner_html === 'X' || temp_inner_html === 'O'){ // If the button contains 'X' or 'O'
+            but_clicked[counter-1] = 1; // Mark the button as clicked
         }
     }
+
+    // Check if it's the user's turn based on the current turn number from the server
     let my_turn = (((web_render_stuff.current_turn === 1) && (me_first_player)) || ((web_render_stuff.current_turn === 2) && (!me_first_player)));
     if (my_turn){
-        glob_my_turn = true;
-        document.querySelector('.me_player').style.opacity = 1;
-        document.querySelector('.other_player').style.opacity = 0.3;
+        glob_my_turn = true; // Set user's turn flag to true
+        document.querySelector('.me_player').style.opacity = 1; // Make the current player visible
+        document.querySelector('.other_player').style.opacity = 0.3; // Dim the other player
     }else{
-        glob_my_turn = false;
-        document.querySelector('.me_player').style.opacity = 0.3;
-        document.querySelector('.other_player').style.opacity = 1;
+        glob_my_turn = false; // Set user's turn flag to false
+        document.querySelector('.me_player').style.opacity = 0.3; // Dim the current player
+        document.querySelector('.other_player').style.opacity = 1; // Make the other player visible
     }
+
+    // If there is a message, call addMessage to display it
     if (web_render_stuff.msg != ''){addMessage(web_render_stuff.msg);};
-    
 }))
 
+// Listen for 'not-your-turn' event from the server and show message
 socket.on('not-your-turn', (msg)=>{showMsg(msg)});
 
+// Event listener for sending a chat message
 document.getElementById('send-message-button').addEventListener('click', ()=>{
-    const text_box = document.getElementById('message_to_send');
-    if(text_box.value != ''){
-        let msg_txt = text_box.value;
-        socket.emit('chat-msg-user', {msg_txt, user_id})
-        text_box.value = '';
+    const text_box = document.getElementById('message_to_send'); // Get the message input field
+    if(text_box.value != ''){ // If the input is not empty
+        let msg_txt = text_box.value; // Get the message text
+        socket.emit('chat-msg-user', {msg_txt, user_id}) // Emit the message to the server
+        text_box.value = ''; // Clear the input field after sending the message
     }
 });
 
+// Listen for incoming chat messages from the server
 socket.on('chat-msg-server', (msg_entire)=>{
-    let msg_sender = msg_entire.msg_sender;
-    let msg_content = msg_entire.msg_text;
-    let msg_time = msg_entire.msg_time;
-    let msg_ = document.createElement('div');
-    msg_.className = "messages";
-    msg_.innerHTML = `<div class="meta-info">${msg_sender} ${msg_time}</div><div class="main-msg"><p>${msg_content}</p></div>`
-    document.querySelector('.message-area').appendChild(msg_);
+    let msg_sender = msg_entire.msg_sender; // Get the sender's name
+    let msg_content = msg_entire.msg_text; // Get the message content
+    let msg_time = msg_entire.msg_time; // Get the time of the message
+    let msg_ = document.createElement('div'); // Create a new div for the message
+    msg_.className = "messages"; // Assign class for styling
+    msg_.innerHTML = `<div class="meta-info">${msg_sender} ${msg_time}</div><div class="main-msg"><p>${msg_content}</p></div>` // Format the message with sender, time, and content
+    document.querySelector('.message-area').appendChild(msg_); // Append the message to the message area
 })
 
+// Listen for a message from the server to handle the computer opponent connection
 socket.on('computer-connect', (msg)=>{
-    document.querySelector('.connecting-overlay').style.display = 'none';
-    let names_of_players = msg.split('---|---');
-    let player_1 = names_of_players[0];
-    let player_2 = names_of_players[1];
+    document.querySelector('.connecting-overlay').style.display = 'none'; // Hide the connecting overlay
+    let names_of_players = msg.split('---|---'); // Split the message to get player names
+    let player_1 = names_of_players[0]; // Get player 1's name
+    let player_2 = names_of_players[1]; // Get player 2's name
     let other_player;
-    if (user_name === player_1){
-        showMsg(`You have been connected to ${player_2}. You go First`);
-        other_player = player_2;
-        me_first_player = true;
-        glob_my_turn = true;
-    }else{
-        showMsg(`You have been connected to ${player_1}. You go Second`);
-        other_player = player_1;
-        me_first_player = false;
-        glob_my_turn = false;
+    if (user_name === player_1){ // If the user is player 1
+        showMsg(`You have been connected to ${player_2}. You go First`); // Show message indicating the user goes first
+        other_player = player_2; // Set the opponent as player 2
+        me_first_player = true; // Set the flag indicating the user is the first player
+        glob_my_turn = true; // Set user's turn to true
+    }else{ // If the user is player 2
+        showMsg(`You have been connected to ${player_1}. You go Second`); // Show message indicating the user goes second
+        other_player = player_1; // Set the opponent as player 1
+        me_first_player = false; // Set the flag indicating the user is the second player
+        glob_my_turn = false; // Set user's turn to false
     }
-    document.querySelector('.me_player').textContent = 'You';
-    document.querySelector('.other_player').textContent = other_player;
-    other_player_name_glob = other_player;
+    document.querySelector('.me_player').textContent = 'You'; // Display "You" for the current player
+    document.querySelector('.other_player').textContent = other_player; // Display the opponent's name
+    other_player_name_glob = other_player; // Store the opponent's name globally
 })
-
-socket.on('result_here', (some_msg)=>{
+// Listen for the 'result_here' event sent from the server
+socket.on('result_here', (some_msg) => {
+    // Mark that the result has been declared and update the game state
     result_declared = true;
     global_prev_game = true;
+    
+    // Change the text on the connect button to 'Next' for the next game
     document.querySelector('.connect-button').innerHTML = 'Next';
+    
+    // Extract the main result (win/draw) and the win information (type and index)
     let main_result = some_msg.result;
     let win_string = some_msg.string;
-    let type_of_win = win_string.split('-')[0];
-    let index_of_win = +win_string.split('-')[1];
+    let type_of_win = win_string.split('-')[0]; // Type of win (row, col, or diag)
+    let index_of_win = +win_string.split('-')[1]; // Index of the winning line
 
-    if (main_result !== 'D'){
-        if (type_of_win === 'row'){
-            blink_this_row(1 + index_of_win);
-        }else if(type_of_win == 'col'){
-            blink_this_col(1 + index_of_win);
-        }else{
-            blink_this_diag(index_of_win);
+    // If the game is not a draw, handle the winning animation and message
+    if (main_result !== 'D') {
+        // Check the type of win and trigger the appropriate blinking function
+        if (type_of_win === 'row') {
+            blink_this_row(1 + index_of_win); // Blink the row of the winning combination
+        } else if (type_of_win == 'col') {
+            blink_this_col(1 + index_of_win); // Blink the column of the winning combination
+        } else {
+            blink_this_diag(index_of_win); // Blink the diagonal of the winning combination
         }
-        my_timeout = setTimeout(()=>{
-        if (main_result === 'P1'){
-            if (me_first_player){
-                showMsg("You Win!")
-            }else{
-                showMsg(`${other_player_name_glob} Wins!`)
+
+        // Set a timeout to show the winner message after a short delay
+        my_timeout = setTimeout(() => {
+            // Display the appropriate winner message based on who won
+            if (main_result === 'P1') {
+                // Player 1 wins
+                if (me_first_player) {
+                    showMsg("You Win!"); // If it's player 1's turn and the user goes first
+                } else {
+                    showMsg(`${other_player_name_glob} Wins!`); // If it's player 1's turn and the user goes second
+                }
+            } else {
+                // Player 2 wins
+                if (me_first_player) {
+                    showMsg(`${other_player_name_glob} Wins!`); // If it's player 2's turn and the user goes first
+                } else {
+                    showMsg("You Win!"); // If it's player 2's turn and the user goes second
+                }
             }
-        }else{
-            if (me_first_player){
-                showMsg(`${other_player_name_glob} Wins!`)
-            }else{
-                showMsg(`You Win!`)
-            }
-        }
-    }, 1300);
-    }else{
-        showMsg('Draw!')
+        }, 1300); // Delay before showing the winner message
+
+    } else {
+        // If the game is a draw, display a draw message
+        showMsg('Draw!');
     }
-    
-})
-function displayResult(msg_result){
+});
+
+// Function to display the result overlay with the result message
+function displayResult(msg_result) {
+    // Show the result overlay and display the result text
     document.querySelector('.result-overlay').style.display = "block";
     document.querySelector('.result-text').innerHTML = msg_result;
 }
 
-
-function blink_this_row(row_index){
+// Function to blink a winning row
+function blink_this_row(row_index) {
+    // Blink the buttons corresponding to the row (3 buttons)
     blink_these_items(document.getElementById(`but${row_index}`), document.getElementById(`but${row_index + 1}`), document.getElementById(`but${row_index + 2}`));
 }
 
-function blink_this_col(col_index){
-
+// Function to blink a winning column
+function blink_this_col(col_index) {
+    // Blink the buttons corresponding to the column (3 buttons)
     blink_these_items(document.getElementById(`but${col_index}`), document.getElementById(`but${col_index + 3}`), document.getElementById(`but${col_index + 6}`));
 }
 
-function blink_this_diag(diag_index){
-    if (diag_index == 0){
-        blink_these_items(document.getElementById(`but1`), document.getElementById(`but5`), document.getElementById(`but9`));
-    }else{
-        blink_these_items(document.getElementById(`but3`), document.getElementById(`but5`), document.getElementById(`but7`));
+// Function to blink a winning diagonal
+function blink_this_diag(diag_index) {
+    // Depending on the diagonal index, blink the appropriate diagonal buttons
+    if (diag_index == 0) {
+        blink_these_items(document.getElementById(`but1`), document.getElementById(`but5`), document.getElementById(`but9`)); // Main diagonal
+    } else {
+        blink_these_items(document.getElementById(`but3`), document.getElementById(`but5`), document.getElementById(`but7`)); // Anti-diagonal
     }
-
 }
 
-function blink_these_items(item1, item2, item3){
+// Function to blink 3 buttons to highlight the winning combination
+function blink_these_items(item1, item2, item3) {
     let counter_interval = 0;
-    blinkInterval = setInterval(()=>{
-        if ((counter_interval % 2) == 0){
+    // Set an interval to toggle the background color of the winning buttons
+    blinkInterval = setInterval(() => {
+        if ((counter_interval % 2) == 0) {
+            // Set the background color to red on every even interval
             item1.style.backgroundColor = "#A13333";
             item2.style.backgroundColor = "#A13333";
             item3.style.backgroundColor = "#A13333";
-        }else{
+        } else {
+            // Set the background color to a lighter shade of red on every odd interval
             item1.style.backgroundColor = "#a34e4e";
             item2.style.backgroundColor = '#a34e4e';
             item3.style.backgroundColor = '#a34e4e';
         }
         counter_interval += 1;
-        if (counter_interval === 7){
+        
+        // Clear the interval after 7 iterations to stop the blinking
+        if (counter_interval === 7) {
             clearInterval(blinkInterval);
         }
-    }, 300)
-
+    }, 300); // 300ms interval for blinking
 }
 
 
