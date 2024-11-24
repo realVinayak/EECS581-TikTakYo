@@ -595,7 +595,15 @@ function displayProfile(profile_obj, userId){
     let str_to_add = `<div class="profile-place">
     <div class="pp-top">
         <div class="profile-user-name">
-            ${user_name}
+            ${
+                userId == user_id 
+                ? `<form action='/users/change_name' method="POST">
+                  <input type="text" name="name" value="${user_name}"/>
+                  <button type="submit">Change Name</button>
+                  </form>
+                  `
+                : user_name
+            }
         </div>
         ${dm_main_str}
         ${flw_but_main_str}

@@ -98,21 +98,19 @@
     width: 100%;
     display: flex;
     flex-direction: row;
+    align-content: center;
     justify-content: center;
-    position: relative;
-    z-index: 100;
 }
 .main-cont-div{
-    width: 30%;
-    height: 40%;
-    font-family:'Roboto';
-    color: white;
+    z-index: 100;
     align-self: center;
-    display: grid;
-    grid-template-rows: 1fr 5fr;
+    height: 50%;
+    width: 25%;
     background-color: rgba(85, 84, 84, 0.678);
+    font-family: 'Roboto';
+    overflow: auto;
 }
-.title-cont{
+.title-div{
     height: 100%;
     width: 100%;
     display: flex;
@@ -122,48 +120,73 @@
 .title{
     align-self: center;
     font-size: 2rem;
+    color: white;
     font-weight: bolder;
+    text-align: center;
 }
-.main-cont-div > form{
+.form-div{
     height: 100%;
     width: 100%;
 }
-.input-sub-div{
-    display: grid;
-    grid-template-rows: 4fr 2fr;
+.form-div > form{
+    height: 100%;
+    width: 100%;
 }
-.input-div{
+.form-div-input{
+    height: 100%;
+    width: 100%;
+    background-color: none;
+    padding-top: 0.25rem;
     display: grid;
-    grid-template-rows: 1fr 1fr 1fr 1fr;
+    grid-template-rows: 40% 40%;
+}
+.input-cont{
+    height: 100%;
+    width: 100%;
+    background-color: none;
 }
 .input-area{
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 0.25rem;
     display: flex;
     flex-direction: row;
     justify-content: space-between;
-    padding-top: 0.5rem;
-    padding-left: 2rem;
-    padding-right: 2rem;
+    color: white;
 }
-.but-area{
-    width: 100%;
+.but-cont{
     height: 100%;
+    width: 100%;
     background-color: none;
     display: flex;
     flex-direction: row;
     justify-content: center;
 }
-.but-area > button{
-    align-self: center;
-    width: fit-content;
+.but-cont > button{
+    height: 30%;
+    width: 30%;
+    font-family: 'Roboto';
     background-color: black;
+    font-size: 1.25rem;
     color: white;
-    height: fit-content;
-    padding: 1rem;
-    font-size: 1.2rem;
+    border-radius: 0.25rem;
     border-width: 0;
-    border-radius: 0.35rem;
     margin-left: auto;
     margin-right: auto;
+    cursor: pointer;
+}
+.but-cont > button:hover{
+    background-color: rgba(0, 0, 0, 0.473);
+}
+.register-redirect{
+    color: white;
+    padding: 1rem;
+}
+.register-redirect > a{
+    text-decoration: underline;
+    color: rgb(115, 147, 252);
+
 }
 .message{
     padding-left: 1rem;

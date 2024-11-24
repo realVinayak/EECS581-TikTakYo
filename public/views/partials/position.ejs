@@ -1,0 +1,12 @@
+<% if (typeof names != 'undefined') { %>
+    </br>
+    <% names.forEach(function(error){ %>
+        <h3 style="color:white">
+            <%= error.name %>
+            (
+                <%= error.won_count %>
+            )
+        </h1>
+        <hr style="color:Tomato;">
+    <% }); %>
+    <% } %>

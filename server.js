@@ -1025,17 +1025,28 @@ io.on('connection', socket=>{
         let player1; // Declare first player
         let player2; // Declare second player
 
-        let rand_num = Math.random();
-        if (rand_num > 0.5){
-            // Make a new game with computer as the first player, and user as the second player
-            new_game = new active_game('COMPUTER-BOT-HERE', user_name, 'COMPUTER-BOT-HERE', user_id);
-            player2 = user_name; // Set user as the second player
-            player1 = 'Computer Bot'; // Set the computer as the first player
-        }else{
-            // Make a new game with user as the first player, and the computer as the second player
+        if (user_opt === 'o'){
+            // User is the first, make the bot the second.
             new_game = new active_game(user_name, 'COMPUTER-BOT-HERE', user_id, 'COMPUTER-BOT-HERE');
-            player1 = user_name; // Set user as the first player
-            player2 = 'Computer Bot'; // Set computer as the second player
+            player1 = user_name; // Set player 1 to the user
+            player2 = 'Computer Bot'; // Set the player2 to computer bot
+        }else if(user_opt === 'x'){
+            // User is the second, make bot the first
+            new_game = new active_game('COMPUTER-BOT-HERE', user_name, 'COMPUTER-BOT-HERE', user_id);
+            player2 = user_name; // Set player 2 to the user
+            player1 = 'Computer Bot'; // Set player 1 to the bot
+        }else {
+            let rand_num = Math.random(); // Get a random number
+            if (rand_num > 0.5){ // If number is greater than 1, make bot the first player
+                new_game = new active_game('COMPUTER-BOT-HERE', user_name, 'COMPUTER-BOT-HERE', user_id);
+                player2 = user_name; // Set player 2 to the user
+                player1 = 'Computer Bot'; // Set player 1 to the bot
+            }else{
+                // otherwise, make the bot the second player
+                new_game = new active_game(user_name, 'COMPUTER-BOT-HERE', user_id, 'COMPUTER-BOT-HERE');
+                player1 = user_name; // Make player1 the first
+                player2 = 'Computer Bot'; // Make player2 the bot
+            }
         }
 
         new_game.board_state = new_board_state; // Set the board state
@@ -1105,7 +1116,60 @@ io.on('connection', socket=>{
     });
 
     socket.on('chat-msg-user', (msg)=>{
-        // TODO
+        // Get the message text
+        let msg_text = msg.msg_txt;
+        // Get the message id
+        let msg_sender = msg.user_id;
+        // Format the message time
+        let msg_time = moment().format('h:mm a');
+        //First Check if The User is in a Live Game:
+        if (active_players.has(msg_sender)){
+            //Find the room number in which the player is in:
+            let sent_socket = msg.user_id;
+            // Get the length of user's games
+            let len_actv_game_arr = active_games.length;
+            // Initialize room number
+            let room_number = undefined;
+            // Initialize current board
+            let current_board = undefined;
+            // Declare player variable
+            let isPlayer1;
+            // Initialize active game
+            let game_active = undefined;
+            // Initialize message sender
+            let msg_sender = undefined;
+            // Iterate through all the games of a user
+            for (let counter = 0; counter < len_actv_game_arr; counter++){
+                // Get the active game
+                let game_ = active_games[counter];
+                // Check if either sender is a player
+                if ((game_.player1_user_id === sent_socket) || (game_.player2_user_id === sent_socket)){
+                    // Set active game
+                    game_active = game_;
+                    // Set active game number
+                    room_number = game_.room_name;
+                    // Set current board
+                    current_board = game_.board_state;
+                    // Check which user is player1
+                    if (game_.player1_user_id === sent_socket){
+                        isPlayer1 = true;
+                    }else{
+                        isPlayer1 = false;
+                    }
+                }
+            }
+            // if is player1, it is also message sender
+            if (isPlayer1){
+                // Set message sender
+                msg_sender = game_active.player1;
+            }else{
+                // Set message sender
+                msg_sender = game_active.player2;
+            }
+            // Emit chat message
+            io.to(room_number).emit('chat-msg-server', {msg_sender, msg_text, msg_time});
+
+        }
     });
 
     socket.on('user-post-request', (post_ )=>{

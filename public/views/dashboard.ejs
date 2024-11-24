@@ -16,8 +16,8 @@
     <div class="profile-place-overlay">
         <div class="profile-place">
             <div class="pp-top">
-                <div class="profile-user-name">
-                    UserName
+                <div>
+                    <input type="text"/>
                 </div>
                 <div class="dm_msg_main"><button class="dm_but_main">Message</button></div>
                 <div class="follow-main"><button class="fl-main">Follow</button></div>
@@ -93,9 +93,9 @@
                 <textarea name="postContent" id="_postContent" maxlength="500" required=true></textarea>
             </div>
             <div class="form_but_place">
-                <div class="form_button" id="postBut">Post</div>
-                <div class="form_button" id="saveDraftBut">Save as Draft</div>
-                <div class="form_button" id="cancelBut">Cancel</div>
+                <div class="form_button" id="postBut" role="button">Post</div>
+                <div class="form_button" id="saveDraftBut" role="button">Save as Draft</div>
+                <div class="form_button" id="cancelBut" role="button">Cancel</div>
             </div>
         </div>
     </div>
@@ -122,9 +122,9 @@
                 <div class="button-place"><div class="prev-button"><div class="but-text">&#10092;</div></div></div>
                 <div class="main-feed">
                     <div class="type-of-posts">
-                        <div class="user-posts-but">Your Posts</div>
-                        <div class="feed-but">Feed</div>
-                        <div class="liked-posts-but">Liked Posts</div>
+                        <button class="user-posts-but" role="button">Your Posts</button>
+                        <button class="feed-but" role="button">Feed</button>
+                        <button class="liked-posts-but" role="button">Liked Posts</button>
                     </div>
                     <div class="feed-area">
                         <div class="feed-post">
@@ -144,15 +144,15 @@
                         </div>
                     </div>
                 </div>
-                <div class="button-place"><div class="next-button"><div class="but-text">&#10093;</div></div></div>
+                <div class="button-place"><div class="next-button" role="button"><div class="but-text">&#10093;</div></div></div>
             </div>
         </div>
         <div class="misc-container">
             <div class="user-badge">
                 <div class="user-name-area">User: <%= user.name %></div>
-                <div class="profile-but"><div class="bdg-but-1">View Profile</div></div>
-                <div class="notif-but"><div class="bdg-but-2">Notifications: </div></div>
-                <div class="msgs-but"><div class="bdg-but-3">Messages</div></div>
+                <div class="profile-but"><div class="bdg-but-1" role="button">View Profile</div></div>
+                <div class="notif-but"><div class="bdg-but-2" role="button">Notifications: </div></div>
+                <div class="msgs-but"><div class="bdg-but-3" role="button">Messages</div></div>
             </div>
             <div class="misc-stats">
                 <div class="stat-header">

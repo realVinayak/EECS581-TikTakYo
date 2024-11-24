@@ -126,7 +126,7 @@
 }
 .but-area{
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
 }
 .login-but-div{
     display: flex;
@@ -155,7 +155,8 @@
     cursor: pointer;
     align-self: center;
     height: 55%;
-    width: 50%;
+    width: fit-content;
+    padding: 0.25rem;
     font-size: 2rem;
     color: white;
     background-color: rgba(0, 0, 0, 0.733);
