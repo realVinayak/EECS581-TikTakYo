@@ -230,7 +230,7 @@ socket.on('web-render-msg', (web_render_stuff)=>{
 
     // If there is a message, call addMessage to display it
     if (web_render_stuff.msg != ''){addMessage(web_render_stuff.msg);};
-}))
+})
 
 // Listen for 'not-your-turn' event from the server and show message
 socket.on('not-your-turn', (msg)=>{showMsg(msg)});
