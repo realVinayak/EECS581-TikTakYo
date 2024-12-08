@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="/styles/search.css"></link> 
+</head>
+<body>
+
+    <script>
+        //let user_id = '<%= user._id %>';
+        let user_name = '<%= user.name %>';
+        let user_id = '<%= user._id %>';
+    </script>
+    <div class="main-container">
+        <div class="profile-place-overlay">
+            <div class="profile-place">
+                <div class="pp-top">
+                    <div class="profile-user-name">
+                        UserName
+                    </div>
+                    <div class="dm_msg_main"><button class="dm_but_main">Message</button></div>
+                    <div class="follow-main"><button class="fl-main">Follow</button></div>
+                    <div class="remove-follower"><button class="rmv-fl-main">Remove Follower</button></div>
+                    <div class="pp-close-but"><button class="pp-close-but-main">Close</button></div>
+                </div>
+                <div class="pp-bottom">
+                    <div class="profile-games">
+                        <div class="pg-header">
+                            <div class="pg-title">Games</div>
+                            <div class="pg-stats">
+                                <div class="pg-tot">Total: </div>
+                                <div class="pg-won">Won: </div>
+                                <div class="pg-lost">Lost: </div>
+                                <div class="pg-draw">Draw: </div>
+                            </div>
+                        </div>
+                        <div class="game-history">
+                            <div class="gh">
+                                <div class="result_" style="color:red">Lost</div>
+                                <div class="result_name" style="color: red">O:&nbsp;<span class="bdg-prof-link">James</span></div>
+                                <div class="result_name" style="color: green">X:&nbsp;<span class="bdg-prof-link">Vinayak</span></div>
+                                <div class="result_" style="color:green">Won</div>
+                            </div>
+                            <div class="gh">
+                                <div class="result_" style="color:red">Lost</div>
+                                <div class="result_name" style="color: red">O: James</div>
+                                <div class="result_name" style="color: green">X: Vinayak</div>
+                                <div class="result_" style="color:green">Won</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pp-followers">
+                        <div class="pp-frs-title">
+                            Followers (800)
+                        </div>
+                        <div class="pp-frs-content">
+                            <div class="prof-badge">
+                                <div class="prof-name-msg">
+                                    <div class="prof-name"><span class="bdg-prof-link" onClick="()=>{alert('Hello!')}">James</span></div>
+                                    <div class="prof-bdg-msg"><button class="dm-msg-but-id">Message</button></div>
+                                </div>
+                                <div class="prf-bdg-but-place">
+                                    <button class="rmv-flwr">Remove Follower</button>
+                                    <button class="fl-bk">Follow Back</button>
+                                    
+                                </div>
+                            </div>
+                        </div>
+    
+                    </div>
+                    <div class="pp-following">
+                        <div class="pp-fng-title">
+                            Following (800)
+                        </div>
+                        <div class="pp-fng-content">
+                            <div class="prof-badge">
+                            
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/scripts/search.js"></script>
+</body>
+</html>

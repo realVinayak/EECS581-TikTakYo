@@ -70,4 +70,9 @@ router.get('/leaderboard', (req, res)=>{
 });
 
 
+router.get('/search', (req, res)=>{
+    // render a simple one.
+    res.render('search', {user: req.user});
+});
+
 module.exports = router;

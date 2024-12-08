@@ -468,6 +468,8 @@ function displayProfile(profile_obj, userId){
     let following_arr = profile_obj.following_;
     // Get the game history
     let game_history_string = '';
+
+    let isOnline = profile_obj.online_state == 'true';
     // Create the game history string
     if (game_arr){
     for (let counter_1 = 0; counter_1 < game_arr.length; counter_1++){
@@ -567,7 +569,7 @@ function displayProfile(profile_obj, userId){
         </div>`
     }
     
-}
+    }
     let dm_main_str = "";
     let flw_but_main_str = "";
     let rmv_fl_main_str = "";
@@ -590,7 +592,7 @@ function displayProfile(profile_obj, userId){
             rmv_fl_main_str = `<div class="remove-follower"><button class="rmv-fl-main" id=${but_id}>Remove Follower</button></div>`;
         }
     }
-    
+    let circle = `<div class="${isOnline ? "green-circle" : "red-circle"}"; border-radius=50%"></div>`
     // Add games
     let str_to_add = `<div class="profile-place">
     <div class="pp-top">
@@ -602,8 +604,10 @@ function displayProfile(profile_obj, userId){
                   <button type="submit">Change Name</button>
                   </form>
                   `
-                : user_name
+                : 
+                `<div>${user_name}</div>`
             }
+            ${circle}
         </div>
         ${dm_main_str}
         ${flw_but_main_str}

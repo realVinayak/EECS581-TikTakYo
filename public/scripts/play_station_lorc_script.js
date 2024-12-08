@@ -38,27 +38,44 @@ if (!(isLive == 'false')){
     })
 }else{
     // If not live, set up the buttons to connect to computer
+
+    const parseUrl = (inString) => {
+        const splitted = inString.split('?')[1].split('=')[1];
+        return splitted;
+    }
+
     document.getElementById('o-option').addEventListener('click', ()=>{
 
+       // change_globals(); // Reset game state
+       // socket.emit('remove-from-prev-game', {user_id}); 
         // Hide the computer play options overlay
         document.querySelector('.comp-play-opt-overlay').style.display = 'none';
 
         // Emit to connect with computer as 'O' player
-        socket.emit('connect-with-computer', {user_id, user_name, opt: 'o'})
+        socket.emit('connect-with-computer', {user_id, user_name, opt: 'o', level: parseUrl(document.baseURI)})
 
         // Show the connecting overlay
         document.querySelector('.connecting-overlay').style.display = 'block';
     })
     // Set up listener for 'X' option to play against computer
     document.getElementById('x-option').addEventListener('click', ()=>{
+
+        //change_globals(); // Reset game state
+        //socket.emit('remove-from-prev-game', {user_id}); 
+
         document.querySelector('.comp-play-opt-overlay').style.display = 'none'; // Hide overlay
-        socket.emit('connect-with-computer', {user_id, user_name, opt: 'x'}) // Emit to connect as 'X'
+        socket.emit('connect-with-computer', {user_id, user_name, opt: 'x', level: parseUrl(document.baseURI)}) // Emit to connect as 'X'
         document.querySelector('.connecting-overlay').style.display = 'block'; // Show connecting overlay
     })
     // Set up listener for random option to play against computer
     document.getElementById('ran-option').addEventListener('click', ()=>{
+
+
+        //change_globals(); // Reset game state
+        //socket.emit('remove-from-prev-game', {user_id}); 
+
         document.querySelector('.comp-play-opt-overlay').style.display = 'none'; // Hide overlay
-        socket.emit('connect-with-computer', {user_id, user_name, opt: 'ran'}) // Emit random option to connect
+        socket.emit('connect-with-computer', {user_id, user_name, opt: 'ran', level: parseUrl(document.baseURI)}) // Emit random option to connect
         document.querySelector('.connecting-overlay').style.display = 'block'; // Show connecting overlay
     })
     // Listener for 'connect-with-computer' button click to show options
@@ -68,10 +85,10 @@ if (!(isLive == 'false')){
             document.querySelector('.comp-play-opt-overlay').style.display = 'block'; // Show overlay
         }
         // If there's a previous game and result declared, reset game globals
-        if (global_prev_game && (result_declared)){  
-            change_globals(); // Reset game state
-            socket.emit('remove-from-prev-game', {user_id}); // Remove player from previous game
-        }
+        //if (global_prev_game && (result_declared)){  
+        change_globals(); // Reset game state
+        socket.emit('remove-from-prev-game', {user_id}); // Remove player from previous game
+        //}
         
     });
 }

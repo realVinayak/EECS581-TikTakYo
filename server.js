@@ -94,6 +94,17 @@ Array.prototype.sample = function(){
   }
 
 
+// Helper function to check if a user is present in a specified array
+function check_for_val(array1, val){
+    if (array1){
+        for (let counter = 0; counter < array1.length; counter++){
+            if (array1[counter].userId === val){
+                return true
+            }
+        }
+    }
+    return false
+}
 // Name: getScore
 // Author: Nick
 // Date: 10/27/2024
@@ -156,11 +167,14 @@ function getScore(board_with_new_move, played_player, comp_sym){
 // Date: 10/27/2024
 // Preconditions: board_state, comp_sym
 // Postconditions: next move as an int
-function nextMove(board_state, comp_sym){
+function nextMove(board_state, comp_sym, level){
     // Get the empty position
     let empty_pos_ = board_state.get_empty_pos(board_state);
     let score_arr_state = []
     let x_sym = board_state.sym1;
+    if (level == 2){
+        return empty_pos_[0];
+    }
     for (let count = 0; count < empty_pos_.length; count++){
         // Generate new board for each move
         let new_board = board_state.make_move_copy(comp_sym, empty_pos_[count], board_state);
@@ -858,7 +872,10 @@ io.on('connection', socket=>{
             }
             }else{
                 //in case there is no win or draw, the computer will make a move
-                let compMove = nextMove(current_board, comp_sym); // Calls the nextMove function to determine the computer's move based on the current board and its symbol.
+                if (game_active.level == undefined){
+                    throw new Error("Expceted a level!");
+                }
+                let compMove = nextMove(current_board, comp_sym, game_active.level); // Calls the nextMove function to determine the computer's move based on the current board and its symbol.
                 current_board.make_move(comp_sym, compMove, current_board); //update the game board after the computer makes a move
                 let temp_board_state = current_board.get_board_as_val(current_board); // Retrieves the current state of the board as an array of values for rendering.
                 //switch the turn to the next player
@@ -1016,6 +1033,7 @@ io.on('connection', socket=>{
 
     socket.on('connect-with-computer', (user)=>{ //listen for a 'connect-with-computer' event and take a user object as an argument
         console.log("requesting to connect with a computer");
+        console.log(user);
         let user_id = user.user_id; // Get the user id
         let user_name = user.user_name; // Get the user name
         let user_opt = user.opt; // Get the user options
@@ -1051,6 +1069,7 @@ io.on('connection', socket=>{
 
         new_game.board_state = new_board_state; // Set the board state
         new_game.isWithComp = true; // Set the fact that game is against a  bot
+        new_game.level = Number.parseInt(user.level);
         active_games.push(new_game); // Push into active games
         socket.join(`${user_id}`); // Join the room
         new_game.room_name = `${user_id}`; // Set the room name
@@ -1370,8 +1389,27 @@ io.on('connection', socket=>{
                     "posts.$.like_count": new_like_count
                 }
             }, (err, docs)=>{
-                // Emit like changed emit
+
+                if (err){console.log(err)
+                }else{
+                var notif_string = `${liker_name} Liked Your Post!`
+                User.findByIdAndUpdate(poster_id, {$push: {'notifications': notif_string}}, (err, docs)=>{
+                    if(err){
+                        console.log(err);
+                    }else{
+                        let notif_count_ = docs.notif_count;
+                        let notif_count_mod = notif_count_ + 1;
+                        User.findByIdAndUpdate(poster_id, {$set: {'notif_count': notif_count_mod}}, (err, docs)=>{
+                            if(err){
+                            console.log(err);
+                            }
+                        })
+                    }
+                })
                 socket.emit("like-changed");
+                }
+                
+
             })
         })
         });
@@ -1415,7 +1453,9 @@ io.on('connection', socket=>{
                              'followers_': [],
                              'following_': [],
                             'they_follow':false,
-                            'i_follow': false};
+                            'i_follow': false,
+                            'online_state': "false"
+                        };
 
         // Retrieve the profile user's document using `user_data_id`
         User.findById(user_data_id, (err, docs1)=>{
@@ -1427,7 +1467,7 @@ io.on('connection', socket=>{
                 obj_to_return.won_game_count = docs1.won_count;
                 obj_to_return.lost_game_count = docs1.lost_count;
                 obj_to_return.draw_game_count = docs1.draw_count;
-
+                obj_to_return.online_state = docs1.onlineState;
                 // Clone and reverse the games list for chronological order
                 let temp_games = JSON.parse(JSON.stringify(docs1.games));
                 obj_to_return.games_ = temp_games.reverse();
@@ -1447,18 +1487,6 @@ io.on('connection', socket=>{
                     'they_follow': check_for_val(my_followers, follower.userId),    // Check if follower is in requesting user's followers
                     'i_follow': check_for_val(my_following, follower.userId)    // Check if follower is in requesting user's following
                 }})
-
-                // Helper function to check if a user is present in a specified array
-                function check_for_val(array1, val){
-                    if (array1){
-                        for (let counter = 0; counter < array1.length; counter++){
-                            if (array1[counter].userId === val){
-                                return true
-                            }
-                        }
-                    }
-                    return false
-                }
 
                 // Map the profile user's following to include whether the requesting user follows them and vice versa
                 let other_following_obj_arr = other_person_following.map((following)=>{return{
@@ -1722,8 +1750,100 @@ io.on('connection', socket=>{
 
     // Socket event for removing a follower (implementation needed)
     socket.on('remove-follower', (rec_obj)=>{
-        // TODO: Implement this
+        let id_1 = rec_obj.id_1;
+        let id_2 = rec_obj.id_2;
+        User.findOneAndUpdate({'_id': id_1}, {$pull:
+        {'followers':{'userId':id_2}}}, (err, docs)=>{
+            if(err){
+                console.log(err);
+            }else{
+                User.findById(id_2, (err, docs2)=>{
+                    if(err){
+                        console.log(err);
+                    }else{
+                        let feed_array = docs2.posts_to_show;
+                        let liked_post_array = docs2.liked_posts;
+                        for (let counter = 0; counter<feed_array.length; counter++){
+                            let post_ = feed_array[counter];
+                            if (post_.split('***')[0] == id_1){
+                                User.findOneAndUpdate({'_id': id_2}, 
+                                {$pull:
+                                    {'posts_to_show':post_}
+                                }, (err, docs)=>{
+                                    if(err){
+                                        console.log(err);
+                                    }
+                                })
+                            }
+                        }
+                        for (let counter = 0; counter<liked_post_array.length; counter++){
+                            let post_ = liked_post_array[counter];
+                            if (post_.split('***')[0] == id_1){
+                                User.findOneAndUpdate({'_id': id_2}, 
+                                {$pull:
+                                    {'liked_post':post_}
+                                }, (err, docs)=>{
+                                    if(err){
+                                        console.log(err);
+                                    }
+                                })
+                            }
+                        }
+                        User.findOneAndUpdate({'_id': id_2}, {$pull:
+                            {'following':{'userId':id_1}}}, (err, docs)=>{
+                                if(err){
+                                    console.log(err);
+                                }else{
+                                    socket.emit('refresh-prof', {'id_1':id_1, 'id_2':id_2});
+                                }
+                            })
+                    }
+                })
+
+
+            }
+        }
+            )
     });
+
+    let tempInitialObj = {
+        user_name: "Enter search query",
+        user_id: -1,
+        tot_game_count: 0,
+        won_game_count: 0,
+        lost_game_count: 0,
+        draw_game_count: 0,
+        games_: [],
+        followers_: [],
+        following_: []
+    };
+
+    socket.on("get-search-query", ({name, id})=>{
+        console.log("received query for ", name);
+        const myId = id;
+        User.findById(myId, (err, docs)=>{
+            const my_followers = docs.followers;
+            const my_following = docs.following;
+            User.find({name: new RegExp(name)}, (err, docs)=>{
+                if (err){
+                    console.log(err);
+                }else{
+                    const niceResults = docs.map((curr)=>({
+                        userId: curr._id, 
+                        id: curr._id, 
+                        name: curr.name,
+                        userName: curr.name, ...curr,
+                        they_follow: check_for_val(my_followers, curr.userId),
+                        i_follow: check_for_val(my_following, curr.user_id)
+
+                    }));
+                    const niceProfile = {...tempInitialObj, user_name: name, followers_: niceResults};
+                    socket.emit("return-search-query", niceProfile);
+                }
+            })
+        })
+
+    })
 
     // Socket event for following another user
     socket.on('make-user-follow', (some_obj)=>{
@@ -1789,8 +1909,60 @@ io.on('connection', socket=>{
 
     // Socket event for unfollowing a user
     socket.on('make-user-unfollow', (some_obj)=>{
-        // TODO: Implement this
-    })
+        let id_1 = some_obj.id_1;
+        let id_2 = some_obj.id_2;
+        let name_1;
+        let name_2;
+        User.findOneAndUpdate({'_id': id_2}, {$pull:
+            {'followers':{'userId':id_1}}}, (err, docs)=>{
+                if(err){
+                    console.log(err);
+                }else{
+                    User.findById(id_1, (err, docs2)=>{
+                        if(err){
+                            console.log(err);
+                        }else{
+                            let feed_array = docs2.posts_to_show;
+                            let liked_post_array = docs2.liked_posts;
+                            for (let counter = 0; counter<feed_array.length; counter++){
+                                let post_ = feed_array[counter];
+                                if (post_.split('***')[0] == id_2){
+                                    User.findOneAndUpdate({'_id': id_1}, 
+                                    {$pull:
+                                        {'posts_to_show':post_}
+                                    },(err, docs)=>{
+                                        if(err){
+                                            console.log(err);
+                                        }
+                                    })
+                                }
+                            }
+                            for (let counter = 0; counter<liked_post_array.length; counter++){
+                                let post_ = liked_post_array[counter];
+                                if (post_.split('***')[0] == id_2){
+                                    User.findOneAndUpdate({'_id': id_1}, 
+                                    {$pull:
+                                        {'liked_post':post_}
+                                    }, (err, docs)=>{
+                                        if(err){
+                                            console.log(err);
+                                        }
+                                    })
+                                }
+                            }
+                            User.findOneAndUpdate({'_id': id_1}, {$pull:
+                                {'following':{'userId':id_2}}}, (err, docs)=>{
+                                    if(err){
+                                        console.log(err);
+                                    }else{
+                                        socket.emit('refresh-prof', {'id_1':id_1, 'id_2':id_2});
+                                    }
+                                })
+                        }
+                    })  
+                }
+            })
+    });
 
     // Socket event to get the notification count for a specific user
     socket.on('get-user-notif-count', (user_id)=>{
