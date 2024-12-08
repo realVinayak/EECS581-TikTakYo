@@ -1361,58 +1361,68 @@ io.on('connection', socket=>{
 
     // Event listener for when a client requests to change a post's liked status
     socket.on('change_post_liked_stat', (msg_stuff)=>{
-       console.log("requesting to change post like;");
-       let is_liked = msg_stuff.is_liked; // Whether liked
-       let post_id = msg_stuff.post_id; //  post id
-       let user_id = socket_id_dict[socket.id]; //  user id
-       let poster_id = post_id.split('***')[0]; // poster id
-       let modified_like_count = is_liked ? -1 : 1; // on liked, it's a disklike
-    
-       // Get the record's like posts
-       User.findByIdAndUpdate(user_id, {$pull: {'liked_posts':post_id}}, (err, docs)=>{
+        let is_liked = msg_stuff.is_liked;
+        let post_id = msg_stuff.post_id;
+        let user_id = socket_id_dict[socket.id];
+        let poster_id = post_id.split('***')[0];
+        let poster_post_index = +post_id.split('***')[1]
+        var liker_name;
+        if (is_liked){
+            User.findByIdAndUpdate(user_id, {$pull: {'liked_posts':post_id}}, (err, docs)=>{
 
-        // Get the post
-        User.findById(poster_id, (err, docs)=>{
-            // Add the new liked post
-            let posts_arr = [...docs.posts];
-            // Get the post filtered
-            let post_filtered_arr = posts_arr.filter((post_f)=>{return (post_f.post_id_u === post_id)});
-            // Get the first post matching ID
-            let post_filtered = post_filtered_arr[0];
-            // Get the current like count
-            let current_like_count = +(post_filtered.like_count);
-            // Adjust the new liek count
-            let new_like_count = current_like_count + modified_like_count;
-            // Update the record's like count
-            User.findOneAndUpdate({'_id':poster_id, "posts.post_id_u":post_id},{
-                "$set":{
-                    "posts.$.like_count": new_like_count
-                }
-            }, (err, docs)=>{
-
-                if (err){console.log(err)
-                }else{
-                var notif_string = `${liker_name} Liked Your Post!`
-                User.findByIdAndUpdate(poster_id, {$push: {'notifications': notif_string}}, (err, docs)=>{
-                    if(err){
-                        console.log(err);
-                    }else{
-                        let notif_count_ = docs.notif_count;
-                        let notif_count_mod = notif_count_ + 1;
-                        User.findByIdAndUpdate(poster_id, {$set: {'notif_count': notif_count_mod}}, (err, docs)=>{
+                User.findById(poster_id, (err, docs)=>{
+                    let posts_arr = [...docs.posts]
+                    let post_filtered_arr = posts_arr.filter((post_f)=>{return (post_f.post_id_u === post_id)});
+                    let post_filtered = post_filtered_arr[0];
+                    let current_like_count = +(post_filtered.like_count);
+                    let modified_like_count = current_like_count - 1;
+                    User.findOneAndUpdate({'_id':poster_id, "posts.post_id_u":post_id},{
+                        "$set":{
+                            "posts.$.like_count": modified_like_count
+                        }
+                    }, (err, docs)=>{
+                        socket.emit("like-changed");
+                    })
+                })
+            })
+        }else{
+            User.findByIdAndUpdate(user_id, {$push: {'liked_posts':post_id}}, (err, docs)=>{
+                liker_name = docs.name;
+                User.findById(poster_id, (err, docs)=>{
+                    let posts_arr = [...docs.posts]
+                    let post_filtered_arr = posts_arr.filter((post_f)=>{return (post_f.post_id_u === post_id)});
+                    let post_filtered = post_filtered_arr[0];
+                    let current_like_count = post_filtered.like_count;
+                    let modified_like_count = +(current_like_count) + 1;
+                    User.findOneAndUpdate(
+                        {'_id': poster_id, 
+                        "posts.post_id_u": post_id},
+                        {
+                            $set: {"posts.$.like_count": modified_like_count}
+                        }
+                    , (err, docs)=>{
+                        if (err){console.log(err)
+                        }else{
+                        var notif_string = `${liker_name} Liked Your Post!`
+                        User.findByIdAndUpdate(poster_id, {$push: {'notifications': notif_string}}, (err, docs)=>{
                             if(err){
-                            console.log(err);
+                                console.log(err);
+                            }else{
+                                let notif_count_ = docs.notif_count;
+                                let notif_count_mod = notif_count_ + 1;
+                                User.findByIdAndUpdate(poster_id, {$set: {'notif_count': notif_count_mod}}, (err, docs)=>{
+                                    if(err){
+                                    console.log(err);
+                                    }
+                                })
                             }
                         })
-                    }
+                        socket.emit("like-changed");
+                        }
+                    })
                 })
-                socket.emit("like-changed");
-                }
-                
-
             })
-        })
-        });
+        }
     });
 
     // Event listener for checking if a user is currently active in a game
